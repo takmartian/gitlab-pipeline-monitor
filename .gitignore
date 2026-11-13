@@ -1,0 +1,16 @@
+# SwiftPM / Xcode 构建产物
+.build/
+build/
+DerivedData/
+*.xcuserstate
+
+# 打包产物
+*.dmg
+*.zip
+
+# 图标生成的中间产物（AppIcon.icns 保留，clone 后直接可构建）
+Resources/icon.iconset/
+
+# 系统文件
+.DS_Store
+*.swp

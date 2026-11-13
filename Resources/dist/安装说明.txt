@@ -1,0 +1,39 @@
+GitLab Pipeline Monitor · 安装说明
+====================================
+
+这是一个原生 macOS 菜单栏 App（无 Electron、无外部依赖）。
+因为作者没有 Apple 开发者证书（$99/年），App 用的是 ad-hoc 签名、未做 Apple 公证，
+所以从网上/微信/网盘下载后直接双击，macOS 可能提示：
+
+    「GitLab Pipeline Monitor」已损坏，无法打开。你应该将它移到废纸篓。
+
+这不是文件真的坏了，是 Gatekeeper 拦下了「未公证 + 带隔离属性」的程序。
+下面任选一种即可，装好之后日常使用不会再有任何弹窗。
+
+方法一：双击「安装.command」（推荐）
+    首次双击如果 macOS 提示无法验证开发者，请改为：右键点击它 → 打开 → 再点打开。
+    脚本会自动把 App 拷到 /Applications、去掉隔离属性并启动。
+
+方法二：手动拖拽 + 一行命令
+    1. 双击 dmg 挂载，把 GitLab Pipeline Monitor.app 拖到「应用程序」文件夹。
+    2. 打开「终端」，粘贴执行：
+       xattr -dr com.apple.quarantine "/Applications/GitLab Pipeline Monitor.app"
+    3. 正常打开 App，菜单栏会出现图标，点图标 → 齿轮设置 → 填服务器地址和令牌。
+
+方法三：右键打开（仅当提示是「无法验证开发者」时才有效）
+    在 Finder 里右键 App → 打开 → 打开。
+    如果提示的是「已损坏」，右键打开无效，请用方法一或方法二。
+
+装好之后
+    · 菜单栏图标左键点击 = 打开面板（已打星项目的流水线）；右键 = 菜单。
+    · 访问令牌加密存放在 ~/Library/Application Support/GitLab Pipeline Monitor/tokens.json
+      （AES-GCM，密钥由这台 Mac 的硬件 UUID + 你的登录账户派生，不落盘），
+      因此不会像钥匙串那样每次系统更新或换版本就弹密码框。
+    · 系统要求：macOS 14 及以上，Apple Silicon。
+
+想让提示彻底消失（可选，需要付费证书）
+    有 Apple Developer ID 证书时，执行：
+        ./build.sh release --dist
+    构建脚本会自动改用 Developer ID 签名 + hardened runtime；
+    再配置公证（notarytool）后加 --notarize 即可签名 + 公证 + staple，
+    这样任何人下载都能直接双击打开，不需要任何额外操作。
