@@ -103,6 +103,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         exit(0)
     }
 
+    /// --capture <路径> [panel|settings]：弹出真实界面后抓屏
+    private var capturePath: String? {
+        guard let index = CommandLine.arguments.firstIndex(of: "--capture") else { return nil }
+        return CommandLine.arguments.dropFirst(index + 1).first
+    }
+
     /// --snapshot <面板.png> <设置.png>：离屏渲染界面后退出
     private var snapshotPaths: [String]? {
         guard let index = CommandLine.arguments.firstIndex(of: "--snapshot") else { return nil }
@@ -190,6 +196,14 @@ final class AppController: NSObject, NSApplicationDelegate {
             state.onIconNeedsUpdate?()
             menuBar?.updateIcon()
             renderSnapshots(paths)
+            return
+        }
+
+        if let path = capturePath {
+            // 必须转成 Array：ArraySlice 保留原数组的索引，dropFirst 之后 startIndex 已经不是 0，
+            // 直接 rest[1] 会越界 trap（count 是对的，下标是错的）
+            let rest = Array(CommandLine.arguments.dropFirst(CommandLine.arguments.firstIndex(of: "--capture")! + 1))
+            runCapture(to: path, what: rest.count > 1 ? rest[1] : "panel")
             return
         }
 
@@ -388,6 +402,69 @@ final class AppController: NSObject, NSApplicationDelegate {
             if let error = state.fatalErrorMessage { print("错误 \(error)") } else { print("无致命错误") }
             exit(0)
         }
+    }
+
+    // MARK: - 抓屏出图
+
+    /// --capture <路径> [panel|settings]：以演示模式启动、弹出真实界面后抓屏。
+    /// 比离屏渲染可靠：离屏那条路 NSHostingView 会按内容的理想尺寸撑宽，右侧内容会画到画布外。
+    private func runCapture(to path: String, what: String) {
+        settings.demoMode = true
+        DemoData.apply(to: state)
+        state.onIconNeedsUpdate?()
+        menuBar?.updateIcon()
+        // 截图会进公开仓库：地址栏换成示例地址，抓完在退出前原样写回，
+        // 顺手删掉 didSet 顺手存进示例账户的那条令牌，别留下垃圾条目
+        let originalURL = settings.serverURL
+        settings.serverURL = "https://gitlab.example.com"
+        // 面板/设置窗口必须等应用完成启动后再开：在 applicationDidFinishLaunching 里同步开
+        // 会直接崩（--demo 也是延迟开的，这里照做）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if what == "settings" {
+                self.showSettings()
+            } else {
+                self.menuBar?.open()
+            }
+        }
+        // 再等窗口真正画出来才抓
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            guard let rect = Self.capturedWindowBounds(preferWide: what != "settings") else {
+                print("✗ 找不到窗口")
+                self.settings.serverURL = originalURL
+                exit(1)
+            }
+            let region = "\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))"
+            let task = Process()
+            task.launchPath = "/usr/sbin/screencapture"
+            // -x 不出声，-o 不带阴影（阴影在窗口边界外，会被裁成半截）
+            task.arguments = ["-x", "-o", "-R", region, path]
+            task.launch()
+            task.waitUntilExit()
+            print(task.terminationStatus == 0 ? "✓ 已抓取 \(region) → \(path)" : "✗ screencapture 退出码 \(task.terminationStatus)")
+            TokenStore.remove(account: "gitlab.example.com")
+            self.settings.serverURL = originalURL
+            exit(task.terminationStatus == 0 ? 0 : 1)
+        }
+    }
+
+    /// 在自己的窗口里挑一个：面板约 420 宽，设置窗口更宽，菜单栏状态项很扁，按尺寸区分
+    private static func capturedWindowBounds(preferWide: Bool) -> NSRect? {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return nil }
+        var candidates: [NSRect] = []
+        for info in list {
+            // 数值一律先按 Double/Int 取，再显式转：这些字典是 CFNumber，直接 as? CGFloat / as? pid_t 不可靠
+            guard let owner = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, owner == pid else { continue }
+            guard let box = info[kCGWindowBounds as String] as? [String: Any],
+                  let x = (box["X"] as? NSNumber)?.doubleValue, let y = (box["Y"] as? NSNumber)?.doubleValue,
+                  let w = (box["Width"] as? NSNumber)?.doubleValue, let h = (box["Height"] as? NSNumber)?.doubleValue else { continue }
+            let rect = NSRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h))
+            guard w > 200, h > 200 else { continue }   // 排除扁长的菜单栏状态项
+            candidates.append(rect)
+        }
+        guard !candidates.isEmpty else { return nil }
+        if preferWide { return candidates.filter { $0.width < 500 }.max { $0.width * $0.height > $1.width * $1.height } ?? candidates.max { $0.width * $0.height > $1.width * $1.height } }
+        return candidates.max { $0.width * $0.height > $1.width * $1.height }
     }
 
     // MARK: - 供界面调用

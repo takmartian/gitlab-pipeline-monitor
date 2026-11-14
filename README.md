@@ -12,6 +12,23 @@
 xattr -dr com.apple.quarantine "/Applications/GitLab Pipeline Monitor.app"
 ```
 
+## 界面
+
+同一状态在深色与浅色菜单栏下的样子（三节点图标 + 状态圆点 + 失败数量）：
+
+<img src="docs/screenshots/menu-bar.png" width="230" alt="菜单栏图标（深色菜单栏）" /> <img src="docs/screenshots/menu-bar-light.png" width="230" alt="菜单栏图标（浅色菜单栏）" />
+
+点图标弹出面板：按项目分组列出流水线，每条带分支、提交 SHA、相对时间、耗时、覆盖率和触发人，
+右侧是状态；顶部可搜索与按状态筛选（带计数）。
+
+<img src="docs/screenshots/panel.png" width="400" alt="主面板：按项目分组的流水线状态" />
+
+设置窗口分「连接 / 项目 / 通用 / 关于」四个标签，地址与令牌填完即生效，可先「测试连接」再拉项目：
+
+<img src="docs/screenshots/settings.png" width="620" alt="设置窗口" />
+
+> 截图来自内置演示数据（`--demo` 启动，地址为 `gitlab.example.com`），不连真实 GitLab 也能看到同样的界面。
+
 ## 功能
 
 - **菜单栏图标**：三节点流水线图形（SF Symbol 模板图标，自动适配明暗菜单栏）；可选状态圆点 + 失败数量。
@@ -81,6 +98,8 @@ Gatekeeper 会拦（`spctl -a` 判定为 rejected），提示通常是：
     "$B" --diag                                           # 连接诊断：账号/版本/项目/每项目流水线条数
     "$B" --urls                                           # 链接自检：web_url / 时间等字段是否真的解码出来
     "$B" --openurl                                        # 真的走一遍「在浏览器打开」，验证能不能打开
+    "$B" --capture /tmp/panel.png panel                   # 弹出真实界面后抓屏（README 截图就是这么出的）
+    "$B" --capture /tmp/settings.png settings             # 抓设置窗口
 
 ## 目录
 

@@ -34,8 +34,12 @@ enum Snapshot {
         window.isReleasedWhenClosed = false
         window.backgroundColor = .windowBackgroundColor
         window.hasShadow = false
-        let hosting = NSHostingView(rootView: view)
+        // 必须把根视图钉死在给定尺寸上：NSHostingView 会按内容的「理想尺寸」撑大自己，
+        // 一旦比窗口宽，右侧内容就画到画布外面去了（截图表现为文字被拦腰截断、
+        // 操作图标和按钮缺半截），而且布局会整体错乱。
+        let hosting = NSHostingView(rootView: AnyView(view).frame(width: size.width, height: size.height))
         hosting.frame = NSRect(x: 0, y: 0, width: size.width, height: size.height)
+        hosting.autoresizingMask = [.width, .height]
         window.contentView = hosting
         window.orderFront(nil)
         window.display()
