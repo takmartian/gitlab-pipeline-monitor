@@ -208,6 +208,8 @@ private let en: [String: String] = [
     "打星": "Star",
     "取消打星": "Unstar",
     "监控中": "Monitored",
+    "参与": "Member",
+    "正在加载参与项目…": "Loading member projects…",
     "还没有项目": "No projects yet",
     "先在「连接」里填好地址和令牌，再点「重新拉取项目列表」；列表出来后点行首的星标就能打星。": "Fill in the address and token under Connection, then reload the project list. Click the star at the start of a row to star a project.",
     "每 %d 条": "%d per project",

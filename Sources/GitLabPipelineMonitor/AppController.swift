@@ -307,6 +307,9 @@ final class AppController: NSObject, NSApplicationDelegate {
                 print("  ✗ 项目 \(id)：\(message)")
             }
             print("onlyStarred \(settings.onlyStarred) · 勾选数 \(settings.monitoredProjectIDs.count)")
+            state.ensureMemberProjects()
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            print("补拉参与项目后：member \(state.memberProjects.count) · 可用 \(state.availableProjects.count)")
             print("顶栏账号 \(state.user.map { "\($0.name) @\($0.username)" } ?? "nil")")
             if let error = state.fatalErrorMessage { print("错误 \(error)") } else { print("无致命错误") }
             exit(0)

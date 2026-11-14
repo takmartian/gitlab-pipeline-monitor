@@ -207,7 +207,12 @@ final class AppState: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             if force { self.starredProjects = []; self.memberProjects = [] }
-            await self.loadProjects(client: client)
+            // 用户主动点「重新拉取项目列表」：星标和参与项目都要拉。
+            // 否则开着「仅监控星标」时列表只剩星标，和连接页报的参与项目数对不上
+            async let starredLoad: Void = self.loadStarred(client: client)
+            async let memberLoad: Void = self.loadMember(client: client)
+            await starredLoad
+            await memberLoad
             await self.refreshPipelines(client: client)
             self.lastUpdated = Date()
             self.onIconNeedsUpdate?()
@@ -251,9 +256,10 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// 手动模式的项目列表需要「参与项目」；平时（只监控星标）不拉，用到时补一次
+    /// 项目列表要显示全部可用项目（星标 + 参与）。日常自动刷新在「仅监控星标」时
+    /// 不拉参与项目（可能几百个、要翻好几页），打开设置的项目页时补这一次
     func ensureMemberProjects() {
-        guard !settings.onlyStarred, memberProjects.isEmpty, let client = client() else { return }
+        guard memberProjects.isEmpty, let client = client() else { return }
         Task { [weak self] in
             guard let self else { return }
             await self.loadMember(client: client)

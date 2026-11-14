@@ -206,6 +206,8 @@ struct ConnectionTab: View {
                 testOK = true
                 testInfo = info
                 state.refresh(force: true)
+                // 连接成功后把参与项目也带上，项目页立刻能看到全部项目
+                state.ensureMemberProjects()
             case .failure(let error):
                 testOK = false
                 testInfo = nil
@@ -276,9 +278,16 @@ struct ProjectsTab: View {
                     Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(starColor)
                     Text(loc("星标") + " " + String(state.starredProjects.count))
                     Text("·").foregroundStyle(.tertiary)
+                    Image(systemName: "person.2").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    Text(loc("参与") + " " + String(state.memberProjects.count))
+                    Text("·").foregroundStyle(.tertiary)
                     Image(systemName: "eye").font(.system(size: 9)).foregroundStyle(.tertiary)
                     Text(loc("监控中") + " " + String(monitoredCount))
                     Spacer()
+                    if state.isLoadingProjects && state.memberProjects.isEmpty {
+                        ProgressView().controlSize(.small).scaleEffect(0.6)
+                        Text(loc("正在加载参与项目…"))
+                    }
                     if !settings.onlyStarred {
                         Button(loc("全选")) { selectAll() }.controlSize(.small)
                         Button(loc("清空")) { settings.monitoredProjectIDs = [] }.controlSize(.small)
