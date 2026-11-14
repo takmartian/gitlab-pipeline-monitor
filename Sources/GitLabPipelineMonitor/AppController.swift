@@ -163,6 +163,12 @@ final class AppController: NSObject, NSApplicationDelegate {
             return
         }
 
+        if let index = CommandLine.arguments.firstIndex(of: "--starprobe") {
+            let rest = Array(CommandLine.arguments.dropFirst(index + 1))
+            runStarProbe(keyword: rest.first)
+            return
+        }
+
         Notifier.prepare(requestIfMissing: true)
         state.onIconNeedsUpdate = { [weak self] in self?.menuBar?.updateIcon() }
         menuBar = MenuBarController(state: state, settings: settings)
@@ -400,6 +406,57 @@ final class AppController: NSObject, NSApplicationDelegate {
             print("补拉参与项目后：member \(state.memberProjects.count) · 可用 \(state.availableProjects.count)")
             print("顶栏账号 \(state.user.map { "\($0.name) @\($0.username)" } ?? "nil")")
             if let error = state.fatalErrorMessage { print("错误 \(error)") } else { print("无致命错误") }
+            exit(0)
+        }
+    }
+
+    // MARK: - 打星诊断
+
+    /// --starprobe [项目路径关键词]：把打星相关的请求逐个发一遍，打印状态码与服务器原话。
+    /// 不带关键词时只列出服务器认为已打星的项目（不产生任何改动）。
+    private func runStarProbe(keyword: String?) {
+        Task { @MainActor in
+            guard let client = state.client() else { print("✗ 未配置或令牌不可用"); exit(1) }
+            let starred = (try? await client.starredProjects()) ?? []
+            print("服务器认为已打星 \(starred.count) 个：")
+            for item in starred { print("   id=\(item.id)  \(item.pathWithNamespace)  star_count=\(item.starCount)") }
+            // 方法与路由探测：/version 只接受 GET，DELETE/POST 都该由 GitLab 回 405。
+            // 如果 DELETE 拿到的是纯文本 404，说明请求被网关吃掉、根本没到 GitLab。
+            let delProbe = await client.rawRequest("/version", method: "DELETE")
+            print("DELETE /version → \(delProbe.status) \(String(delProbe.body.prefix(140)))")
+            let postProbe = await client.rawRequest("/version", method: "POST")
+            print("POST   /version → \(postProbe.status) \(String(postProbe.body.prefix(140)))")
+            guard let keyword, !keyword.isEmpty else {
+                print("（只读探测，未做任何改动；加项目路径关键词可试取消打星）")
+                exit(0)
+            }
+            // 关键词可以是项目路径的一部分，也可以直接是项目 id（一个星都没打时只能这样试）
+            let id: Int
+            if let numeric = Int(keyword) {
+                id = numeric
+            } else if let found = starred.first(where: { $0.pathWithNamespace.localizedCaseInsensitiveContains(keyword) }) {
+                id = found.id
+            } else {
+                print("✗ 已打星列表里没有包含「\(keyword)」的项目（也可以直接传项目 id）")
+                exit(1)
+            }
+            let project = await client.rawRequest("/projects/\(id)")
+            print("GET    /projects/\(id) → \(project.status) \(String(project.body.prefix(160)))")
+            let del = await client.rawRequest("/projects/\(id)/star", method: "DELETE")
+            print("DELETE /projects/\(id)/star → \(del.status) \(String(del.body.prefix(300)))")
+            // 走真实代码路径：先确保是打星状态，再调 App 实际用的 client.unstar
+            let re = await client.rawRequest("/projects/\(id)/star", method: "POST")
+            print("POST   /projects/\(id)/star（先打回星）→ \(re.status)")
+            do {
+                _ = try await client.unstar(projectID: id)
+                print("client.unstar(\(id)) → ✓ 成功（这就是面板/设置里点的那个调用）")
+            } catch {
+                let message = (error as? GitLabError)?.message ?? error.localizedDescription
+                print("client.unstar(\(id)) → ✗ \(message)")
+            }
+            print("DELETE /projects/\(id)/star → \(del.status) \(String(del.body.prefix(300)))")
+            let after = (try? await client.starredProjects()) ?? []
+            print("取消后已打星 \(after.count) 个：\(after.map { $0.pathWithNamespace }.joined(separator: " , "))")
             exit(0)
         }
     }

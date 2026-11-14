@@ -201,6 +201,11 @@ final class AppState: ObservableObject {
         let needsProjects = settings.onlyStarred ? starredProjects.isEmpty : availableProjects.isEmpty
         if needsProjects {
             await loadProjects(client: client)
+        } else {
+            // 星标本身会变（在 GitLab 网页上打星/取消星），每次刷新顺手同步一次，
+            // 否则面板会一直停在第一次拉到的那份列表上。星标列表通常只有一个请求的量；
+            // 参与项目可能几百个、要翻好几页，仍然只在需要时补拉。
+            await loadStarred(client: client)
         }
         await refreshPipelines(client: client)
         lastUpdated = Date()

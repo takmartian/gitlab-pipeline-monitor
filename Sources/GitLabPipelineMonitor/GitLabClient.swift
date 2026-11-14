@@ -264,14 +264,45 @@ struct GitLabClient {
     }
 
     /// 打星 / 取消打星
+    /// 诊断用：直接发一个请求，把状态码和服务器原话一起返回（不抛错）
+    func rawRequest(_ path: String, method: String = "GET") async -> (status: Int, body: String) {
+        do {
+            let raw = try await perform(path, query: [], method: method)
+            return (raw.status, String(data: raw.data, encoding: .utf8) ?? "")
+        } catch let error as GitLabError {
+            var code = 0
+            switch error.kind {
+            case .unauthorized: code = 401
+            case .forbidden: code = 403
+            case .notFound: code = 404
+            case .rateLimited: code = 429
+            case .server: code = 500
+            case .http(let value): code = value
+            default: break
+            }
+            return (code, (error.detail ?? "") + " ⟨" + error.message + "⟩")
+        } catch {
+            return (0, error.localizedDescription)
+        }
+    }
+
     @discardableResult
     func star(projectID: Int) async throws -> Data {
         try await post("/projects/\(projectID)/star")
     }
 
+    /// 取消打星。这个端点在不同 GitLab 上不一致：官方文档写的是 DELETE /projects/:id/star，
+    /// 但实测自建实例（GitLab 19.5.3）上该路由根本没注册 —— DELETE 返回的是**纯文本** 404
+    /// （GitLab 自己的 404 是 JSON {"message":"404 Project Not Found"}），而 POST /projects/:id/unstar 返回 201。
+    /// 所以先按官方写法试，拿 404 就自动退回旧端点，两类实例都能用。
     @discardableResult
     func unstar(projectID: Int) async throws -> Data {
-        try await perform("/projects/\(projectID)/star", method: "DELETE").data
+        do {
+            return try await perform("/projects/\(projectID)/star", method: "DELETE").data
+        } catch let error as GitLabError {
+            guard case .notFound = error.kind else { throw error }
+            return try await post("/projects/\(projectID)/unstar")
+        }
     }
 
     @discardableResult
