@@ -53,11 +53,13 @@ struct GitLabClient {
     let authMode: GitLabAuthMode
     private let session: URLSession
 
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.keyDecodingStrategy = .convertFromSnakeCase
-        return d
-    }()
+    /// 这里**不能**设 keyDecodingStrategy = .convertFromSnakeCase：
+    /// 所有模型都自定义了 CodingKeys，按 JSON 原样 key 取值（case webURL = "web_url"），
+    /// 而该策略会先把 web_url 改写成 webUrl，于是这些字段全部静默取不到 ——
+    /// web_url 空 → 「在项目页打开」拼出 "/pipelines" → LaunchServices 当文件打开报 -50；
+    /// updated_at / last_activity_at 空 → 时间一律显示「2,025 年前」；
+    /// job 的 web_url 空 → 「查看作业日志」按钮永远不出现。
+    private static let decoder: JSONDecoder = JSONDecoder()
 
     init(baseURL: URL, token: String, authMode: GitLabAuthMode) {
         self.baseURL = baseURL

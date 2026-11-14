@@ -407,7 +407,8 @@ private struct ProjectPickRow: View {
                     .labelsHidden()
             }
             Button {
-                openURL(project.webURL)
+                let base = state.settings.normalizedBaseURL
+                openURL(project.resolvedWebURL(base: base), base: base)
             } label: {
                 Image(systemName: "safari").font(.system(size: 10))
             }

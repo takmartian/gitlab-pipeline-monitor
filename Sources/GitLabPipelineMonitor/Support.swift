@@ -55,10 +55,29 @@ extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
+/// 在浏览器里打开链接。
+/// 直接拿裸字符串去 URL(string:) 是有坑的：残缺链接（比如 web_url 没取到时拼出的
+/// "/pipelines"）也是合法 URL，但没有 scheme 和主机名，交给 LaunchServices 会被当成
+/// 文件路径，弹出「应用程序无法打开。-50」。这里统一做三件事：
+/// 补 scheme、用服务器地址补全相对路径、拒绝任何非 http(s) 的链接。
 @MainActor
-func openURL(_ string: String?) {
-    guard let string, let url = URL(string: string) else { return }
-    NSWorkspace.shared.open(url)
+@discardableResult
+func openURL(_ string: String?, base: URL? = nil) -> Bool {
+    var raw = string?.trimmed ?? ""
+    if raw.isEmpty, let base { raw = base.absoluteString }
+    if raw.hasPrefix("/"), let base { raw = base.absoluteString + raw }
+    guard !raw.isEmpty else { return false }
+    if !raw.contains("://") { raw = "https://" + raw }
+
+    guard let url = URL(string: raw),
+          let scheme = url.scheme?.lowercased(),
+          scheme == "http" || scheme == "https",
+          let host = url.host, !host.isEmpty
+    else {
+        NSLog("忽略无法打开的链接: \(string ?? "nil")")
+        return false
+    }
+    return NSWorkspace.shared.open(url)
 }
 
 @MainActor

@@ -211,7 +211,21 @@ struct GitLabProject: Codable, Identifiable, Hashable {
         pathWithNamespace.components(separatedBy: "/").last ?? pathWithNamespace
     }
 
-    var pipelineURL: String { webURL + "/pipelines" }
+    /// 项目主页。web_url 万一没取到（字段缺失或版本差异），用服务器地址 + 路径自己拼一个，
+    /// 免得「在项目页打开」点开一个空字符串
+    func resolvedWebURL(base: URL?) -> String {
+        let value = webURL.trimmed
+        if !value.isEmpty { return value }
+        if let base { return base.absoluteString + "/" + pathWithNamespace }
+        return ""
+    }
+
+    /// 流水线列表页。GitLab 13 起内部页面挂在 /-/ 命名空间下，
+    /// 用 /group/project/pipelines 这种旧路径要靠服务端重定向，这里直接给准确的
+    func pipelinesURL(base: URL?) -> String { resolvedWebURL(base: base) + "/-/pipelines" }
+
+    /// 某条流水线的详情页
+    func pipelineURL(_ pipeline: Pipeline, base: URL?) -> String { pipelinesURL(base: base) + "/\(pipeline.id)" }
 }
 
 // MARK: - 流水线
@@ -234,7 +248,9 @@ struct Pipeline: Codable, Identifiable, Hashable {
     var user: GitLabUser?
 
     enum CodingKeys: String, CodingKey {
-        case id, iid, name, sha, ref, status, source, duration, covered, user
+        case id, iid, name, sha, ref, status, source, duration, user
+        // GitLab 的字段名是 coverage，不叫 covered
+        case covered = "coverage"
         case projectID = "project_id"
         case createdAt = "created_at"
         case startedAt = "started_at"
@@ -338,6 +354,14 @@ struct Job: Codable, Identifiable, Hashable {
         self.webURL = webURL
         self.failureReason = failureReason
         self.allowFailure = allowFailure
+    }
+
+    /// 作业日志页；接口没给 web_url 时用项目地址自己拼
+    func resolvedWebURL(base: URL?, project: GitLabProject?) -> String {
+        let value = webURL?.trimmed ?? ""
+        if !value.isEmpty { return value }
+        guard let project else { return "" }
+        return project.resolvedWebURL(base: base) + "/-/jobs/\(id)"
     }
 }
 

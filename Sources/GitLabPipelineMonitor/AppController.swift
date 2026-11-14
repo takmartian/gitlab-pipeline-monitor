@@ -147,6 +147,16 @@ final class AppController: NSObject, NSApplicationDelegate {
             return
         }
 
+        if CommandLine.arguments.contains("--urls") {
+            runURLCheck()
+            return
+        }
+
+        if CommandLine.arguments.contains("--openurl") {
+            runOpenURLCheck()
+            return
+        }
+
         Notifier.prepare(requestIfMissing: true)
         state.onIconNeedsUpdate = { [weak self] in self?.menuBar?.updateIcon() }
         menuBar = MenuBarController(state: state, settings: settings)
@@ -279,6 +289,64 @@ final class AppController: NSObject, NSApplicationDelegate {
         let legacy = TokenStore.legacyAccounts()
         print("钥匙串残留: \(legacy.isEmpty ? "无" : legacy.joined(separator: ", "))")
         exit(0)
+    }
+
+    // MARK: - 链接自检
+
+    /// --openurl：真的走一遍界面用的 openURL()，把第一个星标项目的流水线页打开，
+    /// 用来端到端验证「点浏览器图标能不能打开链接」
+    private func runOpenURLCheck() {
+        Task { @MainActor in
+            guard let client = state.client() else { print("✗ 未配置或令牌不可用"); exit(1) }
+            let base = settings.normalizedBaseURL
+            guard let project = (try? await client.starredProjects())?.first else {
+                print("✗ 没有星标项目")
+                exit(1)
+            }
+            let target = project.pipelinesURL(base: base)
+            print("准备打开 \(target)")
+            let opened = openURL(target, base: base)
+            print(opened ? "✓ 已交给浏览器打开" : "✗ openURL 拒绝了这个链接")
+            // 空串、相对路径这类残缺链接不该再丢给 LaunchServices（那会弹「应用程序无法打开 -50」）
+            print("空串 → \(openURL("", base: nil))（应为 false）")
+            print("相对路径 /pipelines → \(openURL("/pipelines", base: nil))（应为 false）")
+            print("缺 scheme gitlab.example.com/x → \(openURL("gitlab.example.com/x", base: nil))（应为 true）")
+            exit(0)
+        }
+    }
+
+    /// --urls：验证 web_url / updated_at 这类带下划线的字段是否真的解码出来了。
+    /// 「点浏览器图标弹 -50」就是 web_url 为空、拼出 "/pipelines" 被当文件打开导致的。
+    private func runURLCheck() {
+        let base = settings.normalizedBaseURL
+        print("服务器 \(base?.absoluteString ?? "无法解析")")
+        Task { @MainActor in
+            guard let client = state.client() else { print("✗ 未配置或令牌不可用"); exit(1) }
+            let starred = (try? await client.starredProjects()) ?? []
+            print("星标项目 \(starred.count)")
+            for project in starred {
+                print("· \(project.pathWithNamespace)")
+                print("    web_url  \(project.webURL.isEmpty ? "«空»" : project.webURL)")
+                print("    兜底     \(project.resolvedWebURL(base: base))")
+                print("    流水线页 \(project.pipelinesURL(base: base))")
+                print("    活动 \(project.lastActivityAt.map { Fmt.relative($0) } ?? "«nil»") · star=\(project.starCount) · 默认分支 \(project.defaultBranch ?? "«nil»")")
+                let pipes = (try? await client.pipelines(projectID: project.id, limit: 2)) ?? []
+                for item in pipes {
+                    print("      #\(item.iid) \(item.status.rawValue) @\(item.ref) 更新 \(item.updatedAt.map { Fmt.relative($0) } ?? "«nil»") · 触发人 \(item.user?.username ?? "«nil»") · 耗时 \(Fmt.duration(item.duration))")
+                    print("        链接 \(project.pipelineURL(item, base: base))")
+                    if let first = pipes.first, item.id == first.id {
+                        let jobs = (try? await client.jobs(projectID: project.id, pipelineID: item.id)) ?? []
+                        for job in jobs.prefix(2) {
+                            print("        作业 \(job.name)：web_url \(job.webURL ?? "«nil»") → \(job.resolvedWebURL(base: base, project: project))")
+                        }
+                    }
+                }
+            }
+            if let user = try? await client.currentUser() {
+                print("用户 web_url \(user.webURL ?? "«nil»")")
+            }
+            exit(0)
+        }
     }
 
     // MARK: - 连接诊断

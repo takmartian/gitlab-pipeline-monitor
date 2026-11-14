@@ -212,7 +212,7 @@ struct PipelineDetailView: View {
                                 .foregroundStyle(.tertiary)
                                 .textCase(.uppercase)
                             ForEach(stage.jobs) { job in
-                                JobRowView(job: job, projectID: project.id)
+                                JobRowView(job: job, projectID: project.id, project: project)
                             }
                         }
                     }
@@ -246,7 +246,8 @@ struct PipelineDetailView: View {
             Spacer()
 
             Button {
-                openURL(project.webURL + "/pipelines/\(pipeline.id)")
+                let base = state.settings.normalizedBaseURL
+                openURL(project.pipelineURL(pipeline, base: base), base: base)
             } label: {
                 Label(loc("打开流水线页面"), systemImage: "safari")
                     .font(.system(size: 11))
@@ -278,9 +279,16 @@ struct PipelineDetailView: View {
 struct JobRowView: View {
     let job: Job
     let projectID: Int
+    let project: GitLabProject
 
     @EnvironmentObject var state: AppState
     @State private var hover = false
+
+    /// 接口给了 web_url 就用它，没给也能按项目地址拼出来（以前只看 web_url，
+    /// 而 web_url 因为解码问题恒为空，这个按钮从来没出现过）
+    private var jobURL: String {
+        job.resolvedWebURL(base: state.settings.normalizedBaseURL, project: project)
+    }
 
     private var busy: Bool {
         state.busyAction == "job-\(job.id)-retry" || state.busyAction == "job-\(job.id)-cancel"
@@ -316,8 +324,10 @@ struct JobRowView: View {
                     if job.status.canCancel {
                         IconButton(system: "stop.circle", help: loc("停止作业"), size: 10, box: CGSize(width: 20, height: 18)) { state.cancelJob(job, projectID: projectID) }
                     }
-                    if job.webURL != nil {
-                        IconButton(system: "text.viewfinder", help: loc("查看作业日志"), size: 10, box: CGSize(width: 20, height: 18)) { openURL(job.webURL) }
+                    if !jobURL.isEmpty {
+                        IconButton(system: "text.viewfinder", help: loc("查看作业日志"), size: 10, box: CGSize(width: 20, height: 18)) {
+                            openURL(jobURL, base: state.settings.normalizedBaseURL)
+                        }
                     }
                 }
             }
@@ -327,7 +337,7 @@ struct JobRowView: View {
         .background(hover ? Color.primary.opacity(0.05) : Color.clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
         .onHover { hover = $0 }
         .contextMenu {
-            if let url = job.webURL { Button(loc("查看作业日志")) { openURL(url) } }
+            if !jobURL.isEmpty { Button(loc("查看作业日志")) { openURL(jobURL, base: state.settings.normalizedBaseURL) } }
             if job.status.canRetry { Button(loc("重跑作业")) { state.retryJob(job, projectID: projectID) } }
             if job.status.canCancel { Button(loc("停止作业")) { state.cancelJob(job, projectID: projectID) } }
         }

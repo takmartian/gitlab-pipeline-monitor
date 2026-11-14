@@ -107,7 +107,10 @@ struct ProjectSectionView: View {
                     state.setStarred(group.project, starred: !group.project.starred)
                 }
                 IconButton(system: "play.circle", help: loc("运行新流水线"), size: 12, box: CGSize(width: 20, height: 18)) { onRun() }
-                IconButton(system: "safari", help: loc("在项目页打开"), size: 10, box: CGSize(width: 20, height: 18)) { openURL(group.project.pipelineURL) }
+                IconButton(system: "safari", help: loc("在项目页打开"), size: 10, box: CGSize(width: 20, height: 18)) {
+                    let base = state.settings.normalizedBaseURL
+                    openURL(group.project.resolvedWebURL(base: base), base: base)
+                }
             }
             .opacity(showActions ? 1 : 0)
             .allowsHitTesting(showActions)
@@ -201,7 +204,10 @@ struct PipelineRowView: View {
         .onHover { hover = $0 }
         .contextMenu {
             Button(loc("详情")) { onOpen() }
-            Button(loc("在项目页打开")) { openURL(pipelineURL) }
+            Button(loc("在项目页打开")) {
+                let base = state.settings.normalizedBaseURL
+                openURL(project.pipelineURL(pipeline, base: base), base: base)
+            }
             Divider()
             if pipeline.status.canRetry { Button(loc("重试")) { state.retry(pipeline) } }
             if pipeline.status.canCancel { Button(loc("取消")) { state.cancel(pipeline) } }
@@ -210,10 +216,6 @@ struct PipelineRowView: View {
             Button(loc("复制提交 SHA")) { copyToPasteboard(pipeline.sha) }
         }
         .help("\(project.pathWithNamespace) · \(pipeline.ref) · \(pipeline.status.label)")
-    }
-
-    private var pipelineURL: String {
-        project.webURL + "/pipelines/\(pipeline.id)"
     }
 }
 

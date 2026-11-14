@@ -70,6 +70,8 @@ Gatekeeper 会拦（`spctl -a` 判定为 rejected），提示通常是：
     "$B" --snapdetail                                     # 渲染流水线详情页
     "$B" --tokencheck                                     # 检查加密令牌文件（权限/机器指纹/可否解密）
     "$B" --diag                                           # 连接诊断：账号/版本/项目/每项目流水线条数
+    "$B" --urls                                           # 链接自检：web_url / 时间等字段是否真的解码出来
+    "$B" --openurl                                        # 真的走一遍「在浏览器打开」，验证能不能打开
 
 ## 目录
 
