@@ -5,26 +5,29 @@ import SwiftUI
 struct StatusIcon: View {
     let status: PipelineStatus
     var size: CGFloat = 14
-    @State private var angle: Double = 0
 
     var body: some View {
+        Group {
+            if status == .running {
+                // 只有运行中才渲染旋转视图，用 TimelineView 按时间算角度。
+                // 之前用 withAnimation(.repeatForever) + @State，流水线跑完变成「已通过」后
+                // 那个无限动画不会自己停，勾会被转到某个角度（看着像个「r」）
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { context in
+                    let phase = context.date.timeIntervalSinceReferenceDate
+                        .truncatingRemainder(dividingBy: 1.1) / 1.1
+                    icon.rotationEffect(.degrees(phase * 360))
+                }
+            } else {
+                icon
+            }
+        }
+        .help(status.label)
+    }
+
+    private var icon: some View {
         Image(systemName: status.symbol)
             .font(.system(size: size, weight: .semibold))
             .foregroundStyle(Color(status.color))
-            .rotationEffect(.degrees(status == .running ? angle : 0))
-            .onAppear(perform: spin)
-            .onChange(of: status) { _, new in
-                angle = 0
-                if new == .running { spin() }
-            }
-            .help(status.label)
-    }
-
-    private func spin() {
-        guard status == .running else { return }
-        withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
-            angle = 360
-        }
     }
 }
 
