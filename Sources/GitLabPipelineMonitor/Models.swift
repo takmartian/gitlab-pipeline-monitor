@@ -297,6 +297,17 @@ struct Pipeline: Codable, Identifiable, Hashable {
         self.user = user
     }
 
+    /// 列表接口不返回 user / duration / coverage，用详情接口的结果补齐。
+    /// 只补空字段：status 和时间以列表为准，免得详情那边读到旧值反而把状态说旧
+    mutating func mergeDetail(_ detail: Pipeline) {
+        if user == nil { user = detail.user }
+        if duration == nil { duration = detail.duration }
+        if covered == nil { covered = detail.covered }
+        if startedAt == nil { startedAt = detail.startedAt }
+        if finishedAt == nil { finishedAt = detail.finishedAt }
+        if name == nil { name = detail.name }
+    }
+
     var shortSHA: String { String(sha.prefix(8)) }
     /// 列表接口不返回 project_id，归属关系在加载时补齐
     var sortDate: Date { updatedAt ?? createdAt ?? startedAt ?? finishedAt ?? .distantPast }

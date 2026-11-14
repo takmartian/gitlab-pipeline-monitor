@@ -332,7 +332,13 @@ final class AppController: NSObject, NSApplicationDelegate {
                 print("    活动 \(project.lastActivityAt.map { Fmt.relative($0) } ?? "«nil»") · star=\(project.starCount) · 默认分支 \(project.defaultBranch ?? "«nil»")")
                 let pipes = (try? await client.pipelines(projectID: project.id, limit: 2)) ?? []
                 for item in pipes {
-                    print("      #\(item.iid) \(item.status.rawValue) @\(item.ref) 更新 \(item.updatedAt.map { Fmt.relative($0) } ?? "«nil»") · 触发人 \(item.user?.username ?? "«nil»") · 耗时 \(Fmt.duration(item.duration))")
+                    print("      #\(item.iid) \(item.status.rawValue) @\(item.ref) 更新 \(item.updatedAt.map { Fmt.relative($0) } ?? "«nil»")")
+                    print("        列表     触发人 \(item.user?.username ?? "«nil»") · 耗时 \(Fmt.duration(item.duration)) · 覆盖率 \(item.covered ?? "«nil»")")
+                    var enriched = item
+                    if let detail = try? await client.pipelineDetail(projectID: project.id, pipelineID: item.id) {
+                        enriched.mergeDetail(detail)
+                    }
+                    print("        补详情后 触发人 \(enriched.user?.username ?? "«nil»") · 耗时 \(Fmt.duration(enriched.duration)) · 覆盖率 \(enriched.covered ?? "«nil»")")
                     print("        链接 \(project.pipelineURL(item, base: base))")
                     if let first = pipes.first, item.id == first.id {
                         let jobs = (try? await client.jobs(projectID: project.id, pipelineID: item.id)) ?? []

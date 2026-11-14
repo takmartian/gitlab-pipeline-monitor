@@ -241,6 +241,11 @@ struct GitLabClient {
         return list
     }
 
+    /// 单条流水线详情。列表接口不返回 user / duration / coverage，只有这里才有
+    func pipelineDetail(projectID: Int, pipelineID: Int) async throws -> Pipeline {
+        try await get(Pipeline.self, "/projects/\(projectID)/pipelines/\(pipelineID)")
+    }
+
     func jobs(projectID: Int, pipelineID: Int) async throws -> [Job] {
         try await getList(Job.self, "/projects/\(projectID)/pipelines/\(pipelineID)/jobs", query: [
             URLQueryItem(name: "per_page", value: "100")

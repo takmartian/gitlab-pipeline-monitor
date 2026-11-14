@@ -29,6 +29,13 @@ struct PipelineFetch {
     let result: Result<[Pipeline], Error>
 }
 
+/// 一次「单条流水线详情」拉取结果，同样用结构体
+struct PipelineDetailFetch {
+    let projectID: Int
+    let pipelineID: Int
+    let detail: Pipeline?
+}
+
 @MainActor
 final class AppState: ObservableObject {
     // MARK: - 对外状态
@@ -325,6 +332,9 @@ final class AppState: ObservableObject {
             }
         }
 
+        // 列表接口不返回触发人 / 耗时 / 覆盖率，逐条补一次详情
+        await enrichPipelines(client: client, targets: targets, results: &results)
+
         if let unauthorized {
             fatalErrorMessage = unauthorized
         } else if results.isEmpty, !errors.isEmpty, targets.count == 1 {
@@ -336,6 +346,43 @@ final class AppState: ObservableObject {
         notifyTransitions(results)
         pipelines = results
         projectErrors = errors
+    }
+
+    /// GitLab 的流水线列表接口不返回 user / duration / coverage，只有单条详情接口才有。
+    /// 这里按面板实际要显示的范围逐条补一次详情；某条失败就保留列表里的原值，不影响其它条。
+    private func enrichPipelines(client: GitLabClient, targets: [GitLabProject], results: inout [Int: [Pipeline]]) async {
+        var pending: [PipelineDetailFetch] = []
+        for project in targets {
+            for item in results[project.id] ?? [] {
+                pending.append(PipelineDetailFetch(projectID: project.id, pipelineID: item.id, detail: nil))
+            }
+        }
+        guard !pending.isEmpty else { return }
+
+        // 并发窗口 10：监控项目多时也不会把 GitLab 打爆
+        let window = 10
+        var start = 0
+        while start < pending.count {
+            let chunk = Array(pending[start..<min(start + window, pending.count)])
+            start += window
+            await withTaskGroup(of: PipelineDetailFetch.self) { group in
+                for entry in chunk {
+                    let projectID = entry.projectID
+                    let pipelineID = entry.pipelineID
+                    group.addTask {
+                        let detail = try? await client.pipelineDetail(projectID: projectID, pipelineID: pipelineID)
+                        return PipelineDetailFetch(projectID: projectID, pipelineID: pipelineID, detail: detail)
+                    }
+                }
+                for await fetch in group {
+                    guard let detail = fetch.detail,
+                          var list = results[fetch.projectID],
+                          let index = list.firstIndex(where: { $0.id == fetch.pipelineID }) else { continue }
+                    list[index].mergeDetail(detail)
+                    results[fetch.projectID] = list
+                }
+            }
+        }
     }
 
     /// 只在"状态真的变了"时通知，避免每次刷新都弹一遍
