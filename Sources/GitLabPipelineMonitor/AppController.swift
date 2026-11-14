@@ -12,6 +12,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarController?
     private var settingsWindow: SettingsWindowController?
     private var savedInterval: Int = 120
+    /// 截图用：设置-项目页搜索框的预填内容
+    private var settingsProjectsQuery: String = ""
 
     /// --demo / GLPM_DEMO=1：用假数据预览界面，不联网
     var isDemoMode: Bool {
@@ -471,21 +473,27 @@ final class AppController: NSObject, NSApplicationDelegate {
         state.onIconNeedsUpdate?()
         menuBar?.updateIcon()
         // 截图会进公开仓库：地址栏换成示例地址，抓完在退出前原样写回，
-        // 顺手删掉 didSet 顺手存进示例账户的那条令牌，别留下垃圾条目
+        // 顺手删掉 didSet 顺手存进示例账户的那条令牌，别留下垃圾条目。
+        // 只在「连接」页做这件事：改 serverURL 会触发防抖重置，把演示项目全清空。
         let originalURL = settings.serverURL
-        settings.serverURL = "https://gitlab.example.com"
+        let maskAddress = what == "settings"
+        if maskAddress { settings.serverURL = "https://gitlab.example.com" }
         // 面板/设置窗口必须等应用完成启动后再开：在 applicationDidFinishLaunching 里同步开
         // 会直接崩（--demo 也是延迟开的，这里照做）
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NSApp.activate(ignoringOtherApps: true)
             if what == "settings" {
                 self.showSettings()
+            } else if what == "projects" {
+                self.settingsProjectsQuery = "crm"
+                self.showSettings(tab: .projects)
             } else {
                 self.menuBar?.open()
             }
         }
         // 再等窗口真正画出来才抓
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-            guard let rect = Self.capturedWindowBounds(preferWide: what != "settings") else {
+            guard let rect = Self.capturedWindowBounds(preferWide: what == "panel") else {
                 print("✗ 找不到窗口")
                 self.settings.serverURL = originalURL
                 exit(1)
@@ -498,8 +506,10 @@ final class AppController: NSObject, NSApplicationDelegate {
             task.launch()
             task.waitUntilExit()
             print(task.terminationStatus == 0 ? "✓ 已抓取 \(region) → \(path)" : "✗ screencapture 退出码 \(task.terminationStatus)")
-            TokenStore.remove(account: "gitlab.example.com")
-            self.settings.serverURL = originalURL
+            if maskAddress {
+                TokenStore.remove(account: "gitlab.example.com")
+                self.settings.serverURL = originalURL
+            }
             exit(task.terminationStatus == 0 ? 0 : 1)
         }
     }
@@ -528,7 +538,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func showSettings(tab: SettingsTab = .connection) {
         if settingsWindow == nil {
-            settingsWindow = SettingsWindowController(state: state, settings: settings)
+            settingsWindow = SettingsWindowController(state: state, settings: settings,
+                                                     projectsQuery: settingsProjectsQuery)
         }
         settingsWindow?.select(tab)
         settingsWindow?.show()

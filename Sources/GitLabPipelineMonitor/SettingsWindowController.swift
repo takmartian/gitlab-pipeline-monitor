@@ -8,10 +8,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let settings: AppSettings
     private let tabSubject = PassthroughSubject<SettingsTab, Never>()
 
-    init(state: AppState, settings: AppSettings) {
+    init(state: AppState, settings: AppSettings, projectsQuery: String = "") {
         self.state = state
         self.settings = settings
-        let root = SettingsView(tabs: tabSubject)
+        let root = SettingsView(tabs: tabSubject, projectsQuery: projectsQuery)
             .environmentObject(state)
             .environmentObject(settings)
         let hosting = NSHostingController(rootView: root)

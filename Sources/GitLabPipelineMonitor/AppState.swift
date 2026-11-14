@@ -620,36 +620,41 @@ final class AppState: ObservableObject {
     }
 
     private func observeSettings() {
-        settings.$refreshInterval.dropFirst()
+        // 注意 removeDuplicates().dropFirst() 的顺序：
+        // @Published 在订阅时会先发一次当前值，dropFirst 丢掉它；
+        // 而 SwiftUI 的输入框在挂载时会把**同一个值写回**绑定，又触发一次相同值的发射 ——
+        // 不去重的话，打开设置窗口就会误触发「地址变了」，把项目列表整个清空重拉（面板会闪一下空）。
+        // removeDuplicates 记住的基准值就是订阅时的当前值，相同值直接吞掉。
+        settings.$refreshInterval.removeDuplicates().dropFirst()
             .sink { [weak self] _ in Task { @MainActor in self?.restartTimer() } }
             .store(in: &cancellables)
 
-        settings.$serverURL.dropFirst()
+        settings.$serverURL.removeDuplicates().dropFirst()
             .debounce(for: .seconds(1.0), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in Task { @MainActor in self?.resetAndRefresh() } }
             .store(in: &cancellables)
 
         // 换令牌：同一台服务器，项目列表没必要清空（清空后如果这次刷新没成功，列表就一直空着）
-        settings.$token.dropFirst()
+        settings.$token.removeDuplicates().dropFirst()
             .debounce(for: .seconds(1.2), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in Task { @MainActor in self?.resetAndRefresh(keepProjects: true) } }
             .store(in: &cancellables)
 
-        settings.$onlyStarred.dropFirst()
+        settings.$onlyStarred.removeDuplicates().dropFirst()
             .sink { [weak self] _ in Task { @MainActor in self?.resetAndRefresh(keepProjects: true); self?.ensureMemberProjects() } }
             .store(in: &cancellables)
 
-        settings.$monitoredProjectIDs.dropFirst()
+        settings.$monitoredProjectIDs.removeDuplicates().dropFirst()
             .debounce(for: .seconds(0.4), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in Task { @MainActor in self?.refresh(force: true) } }
             .store(in: &cancellables)
 
-        settings.$pipelinesPerProject.dropFirst()
+        settings.$pipelinesPerProject.removeDuplicates().dropFirst()
             .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in Task { @MainActor in self?.refresh(force: true) } }
             .store(in: &cancellables)
 
-        settings.$language.dropFirst()
+        settings.$language.removeDuplicates().dropFirst()
             .sink { [weak self] _ in Task { @MainActor in self?.objectWillChange.send() } }
             .store(in: &cancellables)
     }

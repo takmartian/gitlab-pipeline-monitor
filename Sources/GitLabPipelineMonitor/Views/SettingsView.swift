@@ -39,8 +39,12 @@ struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings
     @State private var tab: SettingsTab = .connection
 
-    init(tabs: PassthroughSubject<SettingsTab, Never>) {
+    /// 截图用：预填项目搜索词，好确认输入文字的对齐位置
+    let projectsQuery: String
+
+    init(tabs: PassthroughSubject<SettingsTab, Never>, projectsQuery: String = "") {
         self.tabRequests = tabs
+        self.projectsQuery = projectsQuery
     }
 
     var body: some View {
@@ -50,7 +54,7 @@ struct SettingsView: View {
                 .tabItem { Label(SettingsTab.connection.title, systemImage: SettingsTab.connection.symbol) }
                 .tag(SettingsTab.connection)
 
-            ProjectsTab()
+            ProjectsTab(prefillQuery: projectsQuery)
                 .settingsPage()
                 .tabItem { Label(SettingsTab.projects.title, systemImage: SettingsTab.projects.symbol) }
                 .tag(SettingsTab.projects)
@@ -250,7 +254,11 @@ struct InfoRow: View {
 struct ProjectsTab: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var settings: AppSettings
-    @State private var query = ""
+    @State private var query: String
+
+    init(prefillQuery: String = "") {
+        _query = State(initialValue: prefillQuery)
+    }
 
     private var available: [GitLabProject] {
         let needle = query.trimmed.lowercased()
@@ -296,7 +304,9 @@ struct ProjectsTab: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
 
-                SearchField(text: $query, placeholder: loc("搜索"))
+                // 不写「搜索」占位：这一行上面已经有「星标 / 参与 / 监控中」的计数，
+                // 再放一个「搜索」既重复、又会被 Form 提到左边当成行标签
+                SearchField(text: $query, placeholder: "")
 
                 if state.availableProjects.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {

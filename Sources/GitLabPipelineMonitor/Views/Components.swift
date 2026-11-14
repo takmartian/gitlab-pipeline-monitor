@@ -180,9 +180,23 @@ struct SearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
-            TextField(placeholder, text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
+            // 占位文字自己画，不要用 TextField(placeholder, text:)：
+            // 那个初始化器的标题在 Form 里会被 SwiftUI 当成「行标签」提到左边一列，
+            // 真正的输入框反而被挤到右边（光标和输入的文字都贴着右边缘）。
+            ZStack(alignment: .leading) {
+                if text.isEmpty, !placeholder.isEmpty {
+                    Text(placeholder)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .allowsHitTesting(false)
+                }
+                TextField("", text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .multilineTextAlignment(.leading)
+                    .labelsHidden()
+            }
             if !text.isEmpty {
                 Button {
                     text = ""
