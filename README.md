@@ -3,6 +3,15 @@
 原生 macOS 菜单栏应用：在菜单栏看 GitLab 打星项目的流水线状态。
 **SwiftUI + AppKit 手写，没有 Electron / Tauri / 任何第三方依赖。**
 
+## 下载
+
+预构建包在 [Releases](https://github.com/takmartian/gitlab-pipeline-monitor/releases/latest)（`.dmg` / `.zip`）。
+本版本为 ad-hoc 签名、未做 Apple 公证，首次打开若被 Gatekeeper 拦住，运行 dmg 里的「安装.command」，或执行：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/GitLab Pipeline Monitor.app"
+```
+
 ## 功能
 
 - **菜单栏图标**：三节点流水线图形（SF Symbol 模板图标，自动适配明暗菜单栏）；可选状态圆点 + 失败数量。
