@@ -524,7 +524,6 @@ struct AboutTab: View {
             VStack(alignment: .leading, spacing: 4) {
                 InfoRow(key: loc("服务器"), value: Fmt.host(settings.normalizedBaseURL))
                 InfoRow(key: loc("项目"), value: locf("共 %d 个项目 · %d 条流水线", state.monitoredProjects.count, state.allVisiblePipelines.count))
-                InfoRow(key: loc("构建位置"), value: AppInfo.bundlePath)
             }
             .padding(.horizontal, 40)
             .frame(maxWidth: .infinity, alignment: .leading)
