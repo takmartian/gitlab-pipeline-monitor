@@ -78,6 +78,25 @@ private let en: [String: String] = [
     "打开 GitLab": "Open GitLab",
     "拖动底边调整高度，双击恢复默认": "Drag the bottom edge to resize · double-click to reset",
 
+    // 更新
+    "检查更新": "Check for Updates",
+    "正在检查更新…": "Checking for Updates…",
+    "更新到 %@": "Update to %@",
+    "更新": "Update",
+    "有新版本 %@": "New version %@",
+    "当前版本 %@": "Current version %@",
+    "已是最新版本": "You're up to date",
+    "检查更新失败": "Could not check for updates",
+    "正在下载更新… %d%%": "Downloading update… %d%%",
+    "正在安装更新…": "Installing update…",
+    "即将退出并安装更新，应用会自动重新启动。": "The app will quit to install the update, then reopen automatically.",
+    "更新源：GitHub Release": "Update source: GitHub Release",
+    "下载地址无效": "Invalid download URL",
+    "无法连接 GitHub（可能被网络或代理挡住）": "Cannot reach GitHub (your network or proxy may be blocking it)",
+    "GitHub 接口访问过于频繁，稍后再试": "GitHub rate limit reached — try again later",
+    "下载校验失败，已放弃更新": "Download verification failed; update aborted",
+    "安装包里没找到 App，已放弃更新": "No app found in the archive; update aborted",
+
     // 面板
     "未配置 GitLab 连接": "GitLab is not configured",
     "填写服务器地址和访问令牌后，这里会显示你打星项目的流水线。": "Add your server address and access token to see pipelines of your starred projects.",

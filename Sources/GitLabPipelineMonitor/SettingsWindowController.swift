@@ -8,12 +8,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let settings: AppSettings
     private let tabSubject = PassthroughSubject<SettingsTab, Never>()
 
-    init(state: AppState, settings: AppSettings, projectsQuery: String = "") {
+    init(state: AppState, settings: AppSettings, updater: UpdateManager, projectsQuery: String = "") {
         self.state = state
         self.settings = settings
         let root = SettingsView(tabs: tabSubject, projectsQuery: projectsQuery)
             .environmentObject(state)
             .environmentObject(settings)
+            .environmentObject(updater)
         let hosting = NSHostingController(rootView: root)
         let window = NSWindow(contentViewController: hosting)
         window.title = loc("设置")

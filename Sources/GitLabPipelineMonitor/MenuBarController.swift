@@ -6,13 +6,15 @@ import SwiftUI
 final class MenuBarController: NSObject, NSPopoverDelegate {
     private let state: AppState
     private let settings: AppSettings
+    private let updater: UpdateManager
     private let statusItem: NSStatusItem
     private let popover = NSPopover()
     private var cancellables = Set<AnyCancellable>()
 
-    init(state: AppState, settings: AppSettings) {
+    init(state: AppState, settings: AppSettings, updater: UpdateManager) {
         self.state = state
         self.settings = settings
+        self.updater = updater
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         configureButton()
@@ -132,6 +134,14 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private func showContextMenu() {
         let menu = NSMenu()
 
+        // 有新版本时放在最上面：这是当前最该被点到的事
+        if let version = updater.latestVersion {
+            let update = NSMenuItem(title: locf("更新到 %@", version), action: #selector(menuUpdate), keyEquivalent: "")
+            update.target = self
+            menu.addItem(update)
+            menu.addItem(.separator())
+        }
+
         let refresh = NSMenuItem(title: loc("刷新"), action: #selector(menuRefresh), keyEquivalent: "r")
         refresh.target = self
         menu.addItem(refresh)
@@ -150,6 +160,15 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
         menu.addItem(.separator())
 
+        let checking = updater.phase == .checking
+        let check = NSMenuItem(title: checking ? loc("正在检查更新…") : loc("检查更新"),
+                               action: #selector(menuCheckUpdate), keyEquivalent: "")
+        check.target = self
+        check.isEnabled = !checking
+        menu.addItem(check)
+
+        menu.addItem(.separator())
+
         let quit = NSMenuItem(title: loc("退出"), action: #selector(menuQuit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
@@ -160,6 +179,13 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     }
 
     @objc private func menuRefresh() { state.refresh(force: true) }
+    @objc private func menuCheckUpdate() {
+        Task { @MainActor in
+            await updater.check(force: true)
+            updater.presentCheckResult()
+        }
+    }
+    @objc private func menuUpdate() { updater.confirmAndInstall() }
     @objc private func menuToggleAutoRefresh() { AppController.shared.toggleAutoRefresh(); updateIcon() }
     @objc private func menuSettings() { AppController.shared.showSettings() }
     @objc private func menuQuit() { NSApp.terminate(nil) }

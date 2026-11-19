@@ -41,6 +41,9 @@ xattr -dr com.apple.quarantine "/Applications/GitLab Pipeline Monitor.app"
 - **令牌加密存本机**（AES-GCM），按服务器主机名分账户，切换实例互不覆盖，不落配置文件、也不会弹钥匙串授权框。
 - **自动刷新**：从不 / 30s / 1 / 2 / 5 / 10 分钟；打开面板时可自动刷新；右键菜单栏图标可暂停。
 - **系统通知**：流水线失败、失败后恢复时通知（只在状态真的变化时通知，不会每次刷新都弹）。
+- **自动更新**：直接以 GitHub Release 作为更新源（不用额外托管任何东西）：
+  启动后每天查一次，右键菜单栏图标可以随时「检查更新」；有新版本时菜单顶部会出现「更新到 x.y.z」，
+  点确认后自动下载 → 校验 sha256 → 替换 → 重新启动。设置 - 关于页也能查和更新。
 - **面板可调大小**：宽度在设置里选；高度直接**拖面板底边**调整（鼠标移到下边缘会出现上下箭头和一条短线提示），
   拖到屏幕放不下或缩到最小会被自动夹住，双击底边恢复默认高度。高度会记住，下次打开还是这个大小。
 - **其他**：开机自启（SMAppService）、中英文（跟随系统或手动）、改动即时生效无需保存。
@@ -59,6 +62,28 @@ xattr -dr com.apple.quarantine "/Applications/GitLab Pipeline Monitor.app"
 非 Apple 签名程序的分区 ID 就是它的 cdhash —— 每重新构建一次 cdhash 就变一次，于是每换一个构建都要重新
 授权一次（弹密码框）。所以令牌改为存 `~/Library/Application Support/GitLab Pipeline Monitor/tokens.json`，
 用 AES-GCM 加密，密钥 = SHA256(前缀 + 本机硬件 UUID + 登录用户名 + 每条随机 salt)，密钥本身不落盘。
+
+## 自动更新
+
+更新源就是本仓库的 GitHub Release，不需要额外的服务器或对象存储：
+
+1. App 启动后延迟几秒查一次 `https://api.github.com/repos/takmartian/gitlab-pipeline-monitor/releases/latest`，
+   之后每 6 小时看一眼（本地缓存 24 小时，不会碰 GitHub 的匿名接口限流）；
+2. 版本号按数字分段比较（`1.1.10` 比 `1.1.9` 新），只在比当前版本新时才提示；
+3. 更新时下载 release 里的 zip 资产，用 GitHub 在资产上给出的 `sha256` 摘要校验完整性；
+4. 解压后起一个独立 helper 进程：等本进程退出 → 把旧版本挪到缓存目录备份 → 装新版本 →
+   去掉隔离属性（ad-hoc 签名未公证，不去掉会被 Gatekeeper 拦）→ 重新启动；
+5. 新版本成功启动后自动删掉备份。万一新版本起不来，旧版本还在
+   `~/Library/Caches/GitLab Pipeline Monitor/previous/` 里，可以手动挪回去。
+
+几个注意点：
+
+- **国内直连 GitHub 慢**：实测 release 资产下载要 20~50 秒，API 也要 1 秒上下。
+  App 走系统代理设置（系统设置 → 网络 → 代理）；如果你的网络需要代理，先把系统代理配上再更新。
+- **权限**：装在 `/Applications` 且文件属于你时，直接替换、不需要管理员密码；
+  装不动时会退回系统授权弹窗（`osascript do shell script … with administrator privileges`）。
+- **更新期间 App 会退出并自动重新启动**，令牌等数据不受影响（存在 `~/Library/Application Support`）。
+- 更新日志在 `~/Library/Caches/GitLab Pipeline Monitor/update.log`。
 
 ## 构建
 
@@ -103,6 +128,8 @@ Gatekeeper 会拦（`spctl -a` 判定为 rejected），提示通常是：
     "$B" --capture /tmp/panel.png panel                   # 弹出真实界面后抓屏（README 截图就是这么出的）
     "$B" --capture /tmp/settings.png settings             # 抓设置窗口
     "$B" --resizetest                                     # 面板高度自检：改高度时打印弹窗窗口边框变化
+    "$B" --updateprobe                                    # 更新自检：GitHub Release 的最新版本 / 资产 / sha256
+    "$B" --updateinstall                                  # 更新链路端到端验证：真下载、真校验、真替换（会替换当前 App）
 
 ## 目录
 

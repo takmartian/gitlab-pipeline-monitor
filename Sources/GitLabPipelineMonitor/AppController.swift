@@ -8,6 +8,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     let settings = AppSettings()
     private(set) lazy var state = AppState(settings: settings)
+    /// 自研更新器：GitHub Release 就是更新源
+    let updater = UpdateManager()
 
     private var menuBar: MenuBarController?
     private var settingsWindow: SettingsWindowController?
@@ -98,7 +100,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         default: view = AnyView(ConnectionTab())
         }
         Snapshot.writeWindow(
-            view.environmentObject(self.state).environmentObject(self.settings),
+            view.environmentObject(self.state).environmentObject(self.settings).environmentObject(self.updater),
             size: NSSize(width: 600, height: 430),
             to: "/tmp/glpm-tab-\(name).png"
         )
@@ -154,7 +156,8 @@ final class AppController: NSObject, NSApplicationDelegate {
             Snapshot.writeWindow(
                 SettingsView(tabs: PassthroughSubject<SettingsTab, Never>())
                     .environmentObject(state)
-                    .environmentObject(settings),
+                    .environmentObject(settings)
+                    .environmentObject(updater),
                 size: NSSize(width: 600, height: 470),
                 to: paths[1]
             )
@@ -187,6 +190,16 @@ final class AppController: NSObject, NSApplicationDelegate {
             return
         }
 
+        if CommandLine.arguments.contains("--updateprobe") {
+            runUpdateProbe()
+            return
+        }
+
+        if CommandLine.arguments.contains("--updateinstall") {
+            runUpdateInstall()
+            return
+        }
+
         if let index = CommandLine.arguments.firstIndex(of: "--starprobe") {
             let rest = Array(CommandLine.arguments.dropFirst(index + 1))
             runStarProbe(keyword: rest.first)
@@ -195,7 +208,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
         Notifier.prepare(requestIfMissing: true)
         state.onIconNeedsUpdate = { [weak self] in self?.menuBar?.updateIcon() }
-        menuBar = MenuBarController(state: state, settings: settings)
+        menuBar = MenuBarController(state: state, settings: settings, updater: updater)
         savedInterval = settings.refreshInterval > 0 ? settings.refreshInterval : 120
 
         if isDemoMode || snapshotPaths != nil {
@@ -251,10 +264,20 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
         } else {
             state.bootstrap()
+            scheduleUpdateCheck()
         }
 
         if let tab = settingsLaunchTab {
             showSettings(tab: tab)
+        }
+    }
+
+    /// 启动后稍等再查更新：别跟首屏抢网络。顺手把上次更新留下的旧版本备份清掉
+    private func scheduleUpdateCheck() {
+        UpdatePaths.prepare()
+        updater.cleanupPreviousVersion()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            Task { @MainActor in await self.updater.check() }
         }
     }
 
@@ -490,6 +513,55 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - 更新诊断
+
+    /// 诊断输出走 stderr：stdout 重定向到文件/管道时是全缓冲，进程不退出就看不到
+    private func probeLog(_ text: String) {
+        FileHandle.standardError.write((text + "\n").data(using: .utf8) ?? Data())
+    }
+
+    /// --updateprobe：打印 GitHub Release 的最新版本、资产与校验摘要
+    private func runUpdateProbe() {
+        Task { @MainActor in
+            await self.updater.check(force: true)
+            probeLog("当前版本 \(self.updater.currentVersion)")
+            if let release = self.updater.release {
+                probeLog("远端最新 \(release.version)（tag \(release.tagName) · prerelease \(release.prerelease)）")
+                probeLog("页面 \(release.htmlURL)")
+                for asset in release.assets {
+                    probeLog("  资产 \(asset.name) · \(asset.size) 字节 · digest \(asset.digest ?? "无")")
+                }
+                if let asset = release.preferredAsset {
+                    probeLog("将下载 \(asset.browserDownloadURL)")
+                }
+            } else {
+                probeLog("没拿到 release")
+            }
+            probeLog("有更新: \(self.updater.updateAvailable) · 最新 \(self.updater.latestVersion ?? "无")")
+            if case .failed(let message) = self.updater.phase { probeLog("失败: \(message)") }
+            exit(0)
+        }
+    }
+
+    /// --updateinstall：查到新版本就直接装，用来端到端验证整条更新链路
+    /// （下载 → 校验 → 解压 → 替换 → 重启）。会真的替换掉当前这个 App。
+    private func runUpdateInstall() {
+        NSLog("更新诊断：进入 runUpdateInstall")
+        Task { @MainActor in
+            NSLog("更新诊断：Task 已启动")
+            await self.updater.check(force: true)
+            NSLog("更新诊断：检查结束，有更新=%@", self.updater.updateAvailable ? "是" : "否")
+            guard self.updater.updateAvailable else {
+                probeLog("没有新版本可装（当前 \(self.updater.currentVersion)）")
+                exit(1)
+            }
+            probeLog("准备安装 \(self.updater.latestVersion ?? "?")，当前是 \(self.updater.currentVersion)")
+            await self.updater.install()
+            // install() 末尾会退出 App；这里兜个底，别让进程挂着
+            DispatchQueue.main.asyncAfter(deadline: .now() + 60) { exit(0) }
+        }
+    }
+
     // MARK: - 抓屏出图
 
     /// --capture <路径> [panel|settings]：以演示模式启动、弹出真实界面后抓屏。
@@ -516,6 +588,8 @@ final class AppController: NSObject, NSApplicationDelegate {
                 self.showSettings(tab: .projects)
             } else if what == "general" {
                 self.showSettings(tab: .general)
+            } else if what == "about" {
+                self.showSettings(tab: .about)
             } else {
                 self.menuBar?.open()
             }
@@ -567,7 +641,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func showSettings(tab: SettingsTab = .connection) {
         if settingsWindow == nil {
-            settingsWindow = SettingsWindowController(state: state, settings: settings,
+            settingsWindow = SettingsWindowController(state: state, settings: settings, updater: updater,
                                                      projectsQuery: settingsProjectsQuery)
         }
         settingsWindow?.select(tab)

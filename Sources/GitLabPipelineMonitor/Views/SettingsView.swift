@@ -497,6 +497,7 @@ struct GeneralTab: View {
 struct AboutTab: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var updater: UpdateManager
 
     var body: some View {
         VStack(spacing: 14) {
@@ -511,6 +512,8 @@ struct AboutTab: View {
             Text(locf("版本 %@ (%@)", AppInfo.version, AppInfo.build))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+
+            updateRow
 
             Text(loc("原生 SwiftUI + AppKit 菜单栏应用，无 Electron、无外部依赖。"))
                 .font(.system(size: 11))
@@ -539,6 +542,48 @@ struct AboutTab: View {
             .padding(.bottom, 18)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// 更新状态 + 检查 / 更新按钮
+    private var updateRow: some View {
+        HStack(spacing: 8) {
+            Text(updateStatus)
+                .font(.system(size: 11))
+                .foregroundStyle(updateTint)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Button(loc("检查更新")) {
+                Task { @MainActor in await updater.check(force: true) }
+            }
+            .controlSize(.small)
+            .disabled(updater.phase.isBusy)
+            if let latest = updater.latestVersion {
+                Button(locf("更新到 %@", latest)) { updater.confirmAndInstall() }
+                    .controlSize(.small)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(.horizontal, 40)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var updateStatus: String {
+        switch updater.phase {
+        case .checking: return loc("正在检查更新…")
+        case .downloading: return loc("正在下载更新…")
+        case .installing: return loc("正在安装更新…")
+        case .failed(let message): return message
+        case .upToDate: return loc("已是最新版本")
+        case .idle:
+            if let latest = updater.latestVersion { return locf("有新版本 %@", latest) }
+            return loc("更新源：GitHub Release")
+        }
+    }
+
+    private var updateTint: Color {
+        if case .failed = updater.phase { return Color(PipelineStatus.failed.color) }
+        if updater.updateAvailable { return Color(PipelineStatus.running.color) }
+        return .secondary
     }
 
     private func diagnostics() -> String {
