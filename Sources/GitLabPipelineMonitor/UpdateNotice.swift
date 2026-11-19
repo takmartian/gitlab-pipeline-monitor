@@ -110,29 +110,78 @@ enum UpdateNotes {
         var lines: [String] = []
         var inFence = false
         for raw in body.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = raw.trimmingCharacters(in: .whitespaces)
+            var line = raw.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("```") {
                 inFence.toggle()
                 continue
             }
             if inFence { continue }
+            // 分隔线（--- / *** / ___）：markdown 里是横线，纯文本里只是几个字符，去掉
+            if isHorizontalRule(line) { continue }
             if line.isEmpty {
                 // 连续空行压成一个
                 if lines.last?.isEmpty == false { lines.append("") }
                 continue
             }
-            var text = line
-            while text.hasPrefix("#") {
-                text = String(text.dropFirst()).trimmed
+            // 引用块：去掉行首的 >
+            while line.hasPrefix(">") {
+                line = String(line.dropFirst()).trimmed
             }
-            if text.hasPrefix("- ") || text.hasPrefix("* ") {
-                text = "· " + String(text.dropFirst(2))
+            // 标题：去掉井号
+            while line.hasPrefix("#") {
+                line = String(line.dropFirst()).trimmed
             }
-            text = text.replacingOccurrences(of: "`", with: "")
-            text = text.replacingOccurrences(of: "**", with: "")
-            lines.append(text)
+            // 列表：- / * / + / 1. 统一成中点
+            if let item = listItem(line) {
+                line = "· " + item
+            }
+            line = line.replacingOccurrences(of: "`", with: "")
+            line = line.replacingOccurrences(of: "**", with: "")
+            line = line.replacingOccurrences(of: "~~", with: "")
+            line = flattenLink(line)
+            lines.append(line)
         }
         while lines.last?.isEmpty == true { lines.removeLast() }
         return lines.isEmpty ? loc("这个版本没有写更新说明。") : lines.joined(separator: "\n")
+    }
+
+    /// 整行都是 - / * / _（至少 3 个）时是 markdown 的水平分隔线
+    private static func isHorizontalRule(_ line: String) -> Bool {
+        let t = line.replacingOccurrences(of: " ", with: "")
+        guard t.count >= 3 else { return false }
+        return t.allSatisfy { $0 == "-" || $0 == "*" || $0 == "_" }
+    }
+
+    /// 列表项正文："- x" / "* x" / "+ x" / "1. x" → "x"，不是列表返回 nil
+    private static func listItem(_ line: String) -> String? {
+        for prefix in ["- ", "* ", "+ "] where line.hasPrefix(prefix) {
+            return String(line.dropFirst(prefix.count))
+        }
+        let parts = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
+        if parts.count == 2 {
+            let head = String(parts[0])
+            if head.hasSuffix("."), head.count > 1, head.dropLast().allSatisfy({ $0.isNumber }) {
+                return String(parts[1])
+            }
+        }
+        return nil
+    }
+
+    /// [文字](地址) → 文字 (地址)：SwiftUI 的 Text 不渲染链接语法，原样留着很扎眼
+    private static func flattenLink(_ line: String) -> String {
+        var out = ""
+        var rest = Substring(line)
+        while let open = rest.firstIndex(of: "["),
+              let close = rest[open...].firstIndex(of: "]"),
+              close < rest.endIndex,
+              rest[rest.index(after: close)...].first == "(" {
+            let afterClose = rest.index(after: close)
+            guard let parenEnd = rest[afterClose...].firstIndex(of: ")") else { break }
+            let text = rest[rest.index(after: open)..<close]
+            let url = rest[afterClose..<parenEnd]
+            out += String(rest[..<open]) + text + " (" + url + ")"
+            rest = rest[rest.index(after: parenEnd)...]
+        }
+        return out + String(rest)
     }
 }
