@@ -74,6 +74,9 @@ xattr -dr com.apple.quarantine "/Applications/GitLab Pipeline Monitor.app"
    提示是一个独立窗口：显示版本号和更新说明，可滚动、可选中复制，两个按钮 ——
    「立即更新」开始下载安装，「忽略此版本」记下这个版本号（比它新的版本照样提示），
    通用设置里可以「取消忽略」；
+
+<img src="docs/screenshots/update-notice.png" width="420" alt="检测到新版本时的更新弹窗：版本号、更新说明、立即更新 / 忽略此版本" />
+
 3. 更新时下载 release 里的 zip 资产，用 GitHub 在资产上给出的 `sha256` 摘要校验完整性；
 4. 解压后起一个独立 helper 进程：等本进程退出 → 把旧版本挪到缓存目录备份 → 装新版本 →
    去掉隔离属性（ad-hoc 签名未公证，不去掉会被 Gatekeeper 拦）→ 重新启动；
