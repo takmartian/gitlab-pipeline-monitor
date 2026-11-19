@@ -1,6 +1,25 @@
 import AppKit
 import SwiftUI
 
+
+// MARK: - 面板尺寸
+
+/// 面板宽度在设置里选，高度直接拖底边调：这里定默认值和上下限
+enum PanelMetrics {
+    static let defaultHeight = 560
+    static let minHeight = 320
+
+    /// 最高不能超过屏幕可用高度：底边一旦拖出屏幕就再也抓不回来
+    static func maxHeight(screen: NSScreen? = NSScreen.main) -> Int {
+        let visible = screen?.visibleFrame.height ?? 1000
+        return max(minHeight, Int(visible) - 12)
+    }
+
+    static func clamp(_ height: Int, screen: NSScreen? = NSScreen.main) -> Int {
+        min(max(height, minHeight), maxHeight(screen: screen))
+    }
+}
+
 // MARK: - 应用元信息
 
 enum AppInfo {

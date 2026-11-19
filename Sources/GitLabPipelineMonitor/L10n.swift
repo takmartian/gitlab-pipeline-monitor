@@ -76,6 +76,7 @@ private let en: [String: String] = [
     "作业": "Jobs",
     "详情": "Details",
     "打开 GitLab": "Open GitLab",
+    "拖动底边调整高度，双击恢复默认": "Drag the bottom edge to resize · double-click to reset",
 
     // 面板
     "未配置 GitLab 连接": "GitLab is not configured",

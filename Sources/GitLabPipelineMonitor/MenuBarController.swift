@@ -10,8 +10,6 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private var cancellables = Set<AnyCancellable>()
 
-    private static let panelHeight: CGFloat = 560
-
     init(state: AppState, settings: AppSettings) {
         self.state = state
         self.settings = settings
@@ -19,6 +17,10 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         super.init()
         configureButton()
         configurePopover()
+        // 面板高度变了要立刻把弹窗窗口撑到同样大小，否则内容会被裁掉
+        settings.onPanelHeightChange = { [weak self] height in
+            self?.syncPanelSize(height: height)
+        }
         observe()
         updateIcon()
     }
@@ -44,8 +46,57 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         syncPanelSize()
     }
 
-    private func syncPanelSize() {
-        popover.contentSize = NSSize(width: CGFloat(settings.panelWidth), height: Self.panelHeight)
+    private func syncPanelSize(height explicitHeight: Int? = nil) {
+        let width = CGFloat(settings.panelWidth)
+        let height = CGFloat(PanelMetrics.clamp(explicitHeight ?? settings.panelHeight, screen: panelScreen))
+        let size = NSSize(width: width, height: height)
+        let window = popover.isShown ? popover.contentViewController?.view.window : nil
+        // 弹窗窗口比内容大一圈阴影留白，改尺寸时得把这圈留白算进去，
+        // 直接把窗口设成 contentSize 会把内容裁掉一圈
+        let margin = window.map {
+            CGSize(width: max(0, $0.frame.width - popover.contentSize.width),
+                   height: max(0, $0.frame.height - popover.contentSize.height))
+        } ?? .zero
+        let top = window?.frame.maxY
+        popover.contentSize = size
+        guard let window, let top else { return }
+        var frame = window.frame
+        var changed = false
+        // 面板挂在菜单栏下面：顶边必须钉住，底边往下长。
+        // AppKit 自己改 contentSize 时不一定保证顶边不动，这里显式钉回去。
+        if abs(frame.maxY - top) > 0.5 {
+            frame.origin.y = top - frame.height
+            changed = true
+        }
+        let expected = NSSize(width: size.width + margin.width, height: size.height + margin.height)
+        if abs(frame.width - expected.width) > 0.5 || abs(frame.height - expected.height) > 0.5 {
+            // AppKit 没跟上（老系统上 contentSize 不一定立刻改窗口），手动撑到同样大小
+            frame.size = expected
+            frame.origin.y = top - expected.height
+            changed = true
+        }
+        if changed {
+            if let visible = panelScreen?.visibleFrame, frame.minY < visible.minY {
+                frame.origin.y = visible.minY
+            }
+            window.setFrame(frame, display: true)
+        }
+    }
+
+    /// 面板挂在哪块屏上（状态栏所在屏）
+    private var panelScreen: NSScreen? {
+        statusItem.button?.window?.screen ?? NSScreen.main
+    }
+
+    /// 诊断用：打印弹窗窗口边框
+    func printPanelFrame(_ label: String) {
+        guard let window = popover.contentViewController?.view.window else {
+            print("[\(label)] 没有窗口")
+            return
+        }
+        let f = window.frame
+        print("[\(label)] contentSize=\(Int(popover.contentSize.width))x\(Int(popover.contentSize.height)) "
+            + "frame=(\(Int(f.origin.x)),\(Int(f.origin.y)) \(Int(f.width))x\(Int(f.height)))")
     }
 
     // MARK: - 图标

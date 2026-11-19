@@ -116,6 +116,98 @@ struct FilterChip: View {
     }
 }
 
+
+
+// MARK: - 面板底边拖拽把手
+
+/// 面板底边：按住上下拖动改面板高度，双击恢复默认高度。
+///
+/// 这里没用 SwiftUI 的 DragGesture：拖动过程中弹窗窗口会跟着变尺寸，
+/// 而窗口一变尺寸 SwiftUI 的手势就会被取消重启，translation 归零，
+/// 结果是鼠标走 20pt 面板才长 10pt。改用 NSView 自己接管鼠标：
+/// 窗口在拖动期间会一直把 mouseDragged 发给按下鼠标的那个视图，
+/// 再用屏幕坐标算位移（窗口坐标会跟着窗口一起动，不可靠）。
+struct PanelResizeGrip: NSViewRepresentable {
+    var currentHeight: Int
+    var onBegin: () -> Void = {}
+    var onResize: (Int) -> Void = { _ in }
+    var onCommit: () -> Void = {}
+    var onReset: () -> Void = {}
+
+    func makeNSView(context: Context) -> GripView {
+        let view = GripView()
+        view.parent = self
+        return view
+    }
+
+    func updateNSView(_ nsView: GripView, context: Context) {
+        nsView.parent = self
+    }
+
+    final class GripView: NSView {
+        var parent: PanelResizeGrip?
+        private var startScreenY: CGFloat = 0
+        private var startHeight: Int = 0
+
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: NSCursor.resizeUpDown)
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.clickCount >= 2 {
+                parent?.onReset()
+                parent?.onCommit()
+                return
+            }
+            startScreenY = NSEvent.mouseLocation.y
+            startHeight = parent?.currentHeight ?? PanelMetrics.defaultHeight
+            parent?.onBegin()
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            // 屏幕坐标：向上为正，往下拖是负数，所以高度要减去它
+            let delta = NSEvent.mouseLocation.y - startScreenY
+            parent?.onResize(startHeight - Int(delta.rounded()))
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            parent?.onCommit()
+        }
+    }
+}
+
+/// 把手外面套一层：悬停时显出一条短线，提示这里可以拖
+struct ResizeHandleBar: View {
+    let currentHeight: Int
+    var onBegin: () -> Void = {}
+    var onResize: (Int) -> Void = { _ in }
+    var onCommit: () -> Void = {}
+    var onReset: () -> Void = {}
+
+    @State private var hover = false
+
+    var body: some View {
+        ZStack {
+            Capsule()
+                .fill(Color.primary.opacity(hover ? 0.3 : 0))
+                .frame(width: 34, height: 3)
+                .allowsHitTesting(false)
+                .animation(.easeOut(duration: 0.15), value: hover)
+
+            PanelResizeGrip(currentHeight: currentHeight,
+                            onBegin: onBegin,
+                            onResize: onResize,
+                            onCommit: onCommit,
+                            onReset: onReset)
+                .frame(height: 8)
+        }
+        .frame(height: 8)
+        .frame(maxWidth: .infinity)
+        .onHover { hover = $0 }
+        .help(loc("拖动底边调整高度，双击恢复默认"))
+    }
+}
+
 // MARK: - 空状态
 
 struct EmptyStateView: View {

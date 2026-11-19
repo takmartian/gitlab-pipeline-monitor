@@ -56,7 +56,7 @@ struct PanelView: View {
     @State private var toastTint: Color = .primary
     @FocusState private var searchFocused: Bool
 
-    private var height: CGFloat { 560 }
+    private var height: CGFloat { CGFloat(settings.panelHeight) }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -348,6 +348,18 @@ struct PanelView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(.bar)
+        // 底边把手：盖在底栏最下面一条（那里只有内边距，不会挡住按钮）
+        .overlay(alignment: .bottom) {
+            ResizeHandleBar(currentHeight: settings.panelHeight) {
+                settings.beginPanelHeightAdjustment()
+            } onResize: { newHeight in
+                settings.panelHeight = PanelMetrics.clamp(newHeight)
+            } onCommit: {
+                settings.endPanelHeightAdjustment()
+            } onReset: {
+                settings.panelHeight = PanelMetrics.defaultHeight
+            }
+        }
     }
 }
 

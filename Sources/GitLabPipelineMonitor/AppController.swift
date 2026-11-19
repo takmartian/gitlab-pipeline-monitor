@@ -83,7 +83,7 @@ final class AppController: NSObject, NSApplicationDelegate {
                                initialCommit: DemoData.commit(for: pipeline))
                 .environmentObject(self.state)
                 .environmentObject(self.settings),
-            size: NSSize(width: CGFloat(self.settings.panelWidth), height: 560),
+            size: NSSize(width: CGFloat(self.settings.panelWidth), height: CGFloat(self.settings.panelHeight)),
             to: "/tmp/glpm-detail.png"
         )
         exit(0)
@@ -103,6 +103,28 @@ final class AppController: NSObject, NSApplicationDelegate {
             to: "/tmp/glpm-tab-\(name).png"
         )
         exit(0)
+    }
+
+    /// --resizetest：验证弹窗在已显示时能不能真的改变高度（打印窗口边框变化）
+    private func runResizeTest() {
+        settings.demoMode = true
+        DemoData.apply(to: state)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            self.menuBar?.open()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                self.menuBar?.printPanelFrame("初始")
+                let steps = [420, 680, 900, 560]
+                for (index, height) in steps.enumerated() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25 * Double(index)) {
+                        self.settings.panelHeight = height
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25 * Double(index) + 0.12) {
+                        self.menuBar?.printPanelFrame("设为 \(height)")
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { exit(0) }
+            }
+        }
     }
 
     /// --capture <路径> [panel|settings]：弹出真实界面后抓屏
@@ -125,7 +147,7 @@ final class AppController: NSObject, NSApplicationDelegate {
                                 dark: true, to: "/tmp/glpm-menubar-dark.png")
         Snapshot.writeWindow(
             PanelView().environmentObject(state).environmentObject(settings),
-            size: NSSize(width: CGFloat(settings.panelWidth), height: 560),
+            size: NSSize(width: CGFloat(settings.panelWidth), height: CGFloat(settings.panelHeight)),
             to: paths[0]
         )
         if paths.count > 1 {
@@ -204,6 +226,11 @@ final class AppController: NSObject, NSApplicationDelegate {
             state.onIconNeedsUpdate?()
             menuBar?.updateIcon()
             renderSnapshots(paths)
+            return
+        }
+
+        if CommandLine.arguments.contains("--resizetest") {
+            runResizeTest()
             return
         }
 

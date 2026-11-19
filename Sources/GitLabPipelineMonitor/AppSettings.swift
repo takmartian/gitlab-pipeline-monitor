@@ -16,6 +16,7 @@ private enum Key {
     static let notifyRecovery = "notifyRecovery"
     static let refreshOnOpen = "refreshOnOpen"
     static let panelWidth = "panelWidth"
+    static let panelHeight = "panelHeight"
 }
 
 @MainActor
@@ -26,6 +27,8 @@ final class AppSettings: ObservableObject {
     private var tokenAccount: String = "default"
     /// 程序内部改写 token 时置真：切账户读回来的空值不是「用户清空令牌」，不该去删存储
     private var isProgrammaticToken = false
+    /// 正在拖面板底边：这期间高度频繁变化，先不落盘
+    private var isAdjustingPanelHeight = false
 
     @Published var serverURL: String {
         didSet {
@@ -115,6 +118,32 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(panelWidth, forKey: Key.panelWidth) }
     }
 
+    /// 面板高度：拖底边实时改，这里是唯一来源
+    @Published var panelHeight: Int {
+        didSet {
+            guard panelHeight != oldValue else { return }
+            // 拖动过程中不落盘：一次拖拽会有上百次写入，松手后存一次就够了
+            if !isAdjustingPanelHeight {
+                defaults.set(panelHeight, forKey: Key.panelHeight)
+            }
+            onPanelHeightChange?(panelHeight)
+        }
+    }
+
+    /// 高度变化回调（菜单栏控制器据此同步弹窗尺寸）。
+    /// 走 didSet 而不是 Combine 观察者：@Published 在 willSet 触发，读到的还是旧值。
+    var onPanelHeightChange: ((Int) -> Void)?
+
+    /// 拖动底边期间不写 UserDefaults
+    func beginPanelHeightAdjustment() { isAdjustingPanelHeight = true }
+
+    /// 拖动结束：把最终高度落盘
+    func endPanelHeightAdjustment() {
+        guard isAdjustingPanelHeight else { return }
+        isAdjustingPanelHeight = false
+        defaults.set(panelHeight, forKey: Key.panelHeight)
+    }
+
     /// 计算属性：真值来自系统，写入即注册/取消登录项（用 objectWillChange 让开关立刻回弹）
     var launchAtLogin: Bool {
         get {
@@ -198,6 +227,11 @@ final class AppSettings: ObservableObject {
         notifyOnFailure = defaults.object(forKey: Key.notifyFailure) as? Bool ?? true
         notifyOnRecovery = defaults.object(forKey: Key.notifyRecovery) as? Bool ?? false
         refreshOnOpen = defaults.object(forKey: Key.refreshOnOpen) as? Bool ?? true
+        // 高度先赋值：init 里读 self.panelWidth 之前，所有存储属性都得初始化完
+        // 用 object(forKey:) 而不是 integer(forKey:)：后者取不到时返回 0，
+        // 分不清「没设过」和「存的就是 0」，会把高度拉成 0
+        let storedHeight = defaults.object(forKey: Key.panelHeight) as? Int ?? PanelMetrics.defaultHeight
+        panelHeight = PanelMetrics.clamp(storedHeight)
         panelWidth = defaults.integer(forKey: Key.panelWidth)
         if !Self.panelWidths.contains(panelWidth) { panelWidth = 420 }
 
