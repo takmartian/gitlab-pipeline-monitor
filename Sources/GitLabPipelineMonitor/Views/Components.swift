@@ -85,13 +85,22 @@ struct FilterChip: View {
                 if let tint {
                     Circle().fill(tint).frame(width: 6, height: 6)
                 }
+                // 标题可以被截断（「成功…」），但计数必须完整可见 ——
+                // 数字才是筛选胶囊里最有用的信息
                 Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(title)      // 被截断时（面板很窄）还能悬停看到全称
                 if let count, count > 0 {
                     Text("\(count)")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(active ? Color.primary : Color.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
                 }
             }
+            // 垂直方向用理想高度：胶囊永远单行，不会因为数字变长而把整行撑高
+            .fixedSize(horizontal: false, vertical: true)
             .font(.system(size: 11, weight: active ? .semibold : .regular))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)

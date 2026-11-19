@@ -487,6 +487,8 @@ final class AppController: NSObject, NSApplicationDelegate {
             } else if what == "projects" {
                 self.settingsProjectsQuery = "crm"
                 self.showSettings(tab: .projects)
+            } else if what == "general" {
+                self.showSettings(tab: .general)
             } else {
                 self.menuBar?.open()
             }

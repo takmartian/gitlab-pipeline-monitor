@@ -170,31 +170,46 @@ struct PanelView: View {
             SearchField(text: $query, placeholder: loc("搜索") + " · " + loc("项目 / 分支"))
                 .focused($searchFocused)
 
-            HStack(spacing: 5) {
-                ForEach(StatusFilter.allCases, id: \.self) { option in
-                    FilterChip(
-                        title: option.title,
-                        count: counts[option] ?? 0,
-                        tint: option.tint,
-                        active: filter == option
-                    ) {
-                        withAnimation(.easeOut(duration: 0.15)) { filter = option }
-                    }
-                }
-                Spacer(minLength: 0)
-                if state.settings.refreshInterval > 0 {
-                    Image(systemName: "timer")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                    Text(AppSettings.refreshIntervalLabel(state.settings.refreshInterval))
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
+            // 空间不够时（面板调窄、或筛选胶囊都带上了计数），
+            // 自动收起右边的刷新文字，只留时钟图标。
+            // 宁可少两个字，也不能让筛选胶囊被挤到换行 —— 竖排两行的胶囊会把整行撑得很高
+            ViewThatFits(in: .horizontal) {
+                filterRow(showTimerLabel: true)
+                filterRow(showTimerLabel: false)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+    }
+
+    private func filterRow(showTimerLabel: Bool) -> some View {
+        HStack(spacing: 5) {
+            ForEach(StatusFilter.allCases, id: \.self) { option in
+                FilterChip(
+                    title: option.title,
+                    count: counts[option] ?? 0,
+                    tint: option.tint,
+                    active: filter == option
+                ) {
+                    withAnimation(.easeOut(duration: 0.15)) { filter = option }
+                }
+            }
+            Spacer(minLength: 0)
+            if state.settings.refreshInterval > 0 {
+                let label = AppSettings.refreshIntervalLabel(state.settings.refreshInterval)
+                Image(systemName: "timer")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .help(label)
+                if showTimerLabel {
+                    Text(label)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+            }
+        }
     }
 
     private var counts: [StatusFilter: Int] {
