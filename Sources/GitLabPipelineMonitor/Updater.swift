@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Combine
 import CryptoKit
 
 // MARK: - 版本号
@@ -101,14 +102,19 @@ final class UpdateManager: ObservableObject {
     @Published private(set) var release: GitHubRelease?
 
     private let repo = "takmartian/gitlab-pipeline-monitor"
+    private let settings: AppSettings
     private var session: URLSession!
     private var timer: Timer?
+    private var cancellables = Set<AnyCancellable>()
+    /// 本次运行已经提示过的版本：同一个版本不反复弹窗
+    private var notifiedVersion: String?
 
     private enum Key {
         static let lastCheck = "update.lastCheck"
     }
 
-    init() {
+    init(settings: AppSettings) {
+        self.settings = settings
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 20
         // 资源超时给足：release 资产实测要 20~50 秒（国内直连 GitHub 慢）
@@ -128,6 +134,15 @@ final class UpdateManager: ObservableObject {
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+
+        // 刚把开关打开就顺手查一次，不用等下一个 6 小时周期
+        settings.$autoUpdateEnabled
+            .removeDuplicates().dropFirst()
+            .sink { [weak self] enabled in
+                guard enabled else { return }
+                Task { @MainActor in await self?.check() }
+            }
+            .store(in: &cancellables)
     }
 
     var currentVersion: String { AppInfo.version }
@@ -139,6 +154,8 @@ final class UpdateManager: ObservableObject {
     func check(force: Bool = false) async {
         NSLog("更新：进入检查 force=%@", force ? "是" : "否")
         guard phase != .checking else { return }
+        // 自动检查受「通用 - 自动更新」开关控制；手动检查（force）不受影响
+        if !force, !settings.autoUpdateEnabled { return }
         if !force {
             let last = UserDefaults.standard.object(forKey: Key.lastCheck) as? Date
             if let last, Date().timeIntervalSince(last) < 24 * 3600 { return }
@@ -152,6 +169,7 @@ final class UpdateManager: ObservableObject {
             if AppVersion.isNewer(latest.version, than: currentVersion) {
                 latestVersion = latest.version
                 phase = .idle
+                handleUpdateFound(latest.version, automatic: !force)
             } else {
                 latestVersion = nil
                 phase = .upToDate
@@ -205,30 +223,34 @@ final class UpdateManager: ObservableObject {
             NSApp.activate()
             alert.runModal()
         default:
-            guard let version = latestVersion else { return }
-            let alert = NSAlert()
-            alert.messageText = locf("有新版本 %@", version)
-            alert.informativeText = loc("即将退出并安装更新，应用会自动重新启动。")
-            alert.addButton(withTitle: loc("更新"))
-            alert.addButton(withTitle: loc("取消"))
-            NSApp.activate()
-            if alert.runModal() == .alertFirstButtonReturn {
-                Task { await install() }
-            }
+            // 有新版本：也弹同一个窗口，把更新内容给用户看
+            presentUpdateNotice()
         }
     }
 
-    /// 有新版本时先确认一下：应用要退出重启，别让人措手不及
-    func confirmAndInstall() {
-        guard let version = latestVersion else { return }
-        let alert = NSAlert()
-        alert.messageText = locf("有新版本 %@", version)
-        alert.informativeText = loc("即将退出并安装更新，应用会自动重新启动。")
-        alert.addButton(withTitle: loc("更新"))
-        alert.addButton(withTitle: loc("取消"))
-        NSApp.activate()
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        Task { await install() }
+    /// 发现新版本时的处理：自动检查才受「忽略此版本」影响，
+    /// 手动检查是用户主动问的，一律把内容摆出来让他自己决定。
+    private func handleUpdateFound(_ version: String, automatic: Bool) {
+        if automatic {
+            if settings.ignoredUpdateVersion == version { return }   // 用户说过忽略
+            if notifiedVersion == version { return }                   // 本次运行已经提示过
+        }
+        notifiedVersion = version
+        presentUpdateNotice()
+    }
+
+    /// 弹更新窗口：展示更新内容，让用户选「立即更新」还是「忽略此版本」
+    func presentUpdateNotice() {
+        guard let release else { return }
+        UpdateNoticeController.present(release: release, currentVersion: currentVersion) { [weak self] in
+            UpdateNoticeController.close()
+            Task { @MainActor in await self?.install() }
+        } onIgnore: { [weak self] in
+            UpdateNoticeController.close()
+            guard let self else { return }
+            self.settings.ignoredUpdateVersion = release.version
+            NSLog("更新：用户忽略了 %@", release.version)
+        }
     }
 
     func install() async {

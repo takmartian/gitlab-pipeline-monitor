@@ -8,8 +8,10 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     let settings = AppSettings()
     private(set) lazy var state = AppState(settings: settings)
-    /// 自研更新器：GitHub Release 就是更新源
-    let updater = UpdateManager()
+    /// 自研更新器：GitHub Release 就是更新源。
+    /// 用 lazy：属性初始化器里拿不到 self.settings（settings 是实例成员），
+    /// 而且诊断模式下压根不该创建它（会起定时器、连网络）。
+    lazy var updater = UpdateManager(settings: settings)
 
     private var menuBar: MenuBarController?
     private var settingsWindow: SettingsWindowController?

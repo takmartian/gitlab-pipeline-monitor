@@ -80,9 +80,16 @@ private let en: [String: String] = [
 
     // 更新
     "检查更新": "Check for Updates",
+    "自动检查更新": "Check for updates automatically",
+    "开启后每天自动检查一次，发现新版本会弹窗展示更新内容，由你决定立即更新还是忽略此版本。": "Checks once a day. When a new version is found, a window shows the release notes — update now or skip this version.",
+    "已忽略 %@ 的更新提示": "Update prompt skipped for %@",
+    "取消忽略": "Undo Skip",
+    "忽略此版本": "Skip This Version",
+    "立即更新": "Update Now",
+    "这个版本没有写更新说明。": "This release has no notes.",
     "正在检查更新…": "Checking for Updates…",
     "更新到 %@": "Update to %@",
-    "更新": "Update",
+    "更新": "Updates",
     "有新版本 %@": "New version %@",
     "当前版本 %@": "Current version %@",
     "已是最新版本": "You're up to date",

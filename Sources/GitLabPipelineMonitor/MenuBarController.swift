@@ -185,7 +185,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             updater.presentCheckResult()
         }
     }
-    @objc private func menuUpdate() { updater.confirmAndInstall() }
+    @objc private func menuUpdate() { updater.presentUpdateNotice() }
     @objc private func menuToggleAutoRefresh() { AppController.shared.toggleAutoRefresh(); updateIcon() }
     @objc private func menuSettings() { AppController.shared.showSettings() }
     @objc private func menuQuit() { NSApp.terminate(nil) }

@@ -472,6 +472,24 @@ struct GeneralTab: View {
                     .disabled(!settings.showStatusBadge)
             }
 
+            Section(loc("更新")) {
+                Toggle(loc("自动检查更新"), isOn: $settings.autoUpdateEnabled)
+                Text(loc("开启后每天自动检查一次，发现新版本会弹窗展示更新内容，由你决定立即更新还是忽略此版本。"))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let ignored = settings.ignoredUpdateVersion {
+                    HStack(spacing: 6) {
+                        Text(locf("已忽略 %@ 的更新提示", ignored))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button(loc("取消忽略")) { settings.ignoredUpdateVersion = nil }
+                            .controlSize(.small)
+                    }
+                }
+            }
+
             Section {
                 Toggle(loc("流水线失败时通知"), isOn: $settings.notifyOnFailure)
                 Toggle(loc("流水线恢复时通知"), isOn: $settings.notifyOnRecovery)
@@ -557,7 +575,7 @@ struct AboutTab: View {
             .controlSize(.small)
             .disabled(updater.phase.isBusy)
             if let latest = updater.latestVersion {
-                Button(locf("更新到 %@", latest)) { updater.confirmAndInstall() }
+                Button(locf("更新到 %@", latest)) { updater.presentUpdateNotice() }
                     .controlSize(.small)
                     .buttonStyle(.borderedProminent)
             }

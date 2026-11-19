@@ -17,6 +17,8 @@ private enum Key {
     static let refreshOnOpen = "refreshOnOpen"
     static let panelWidth = "panelWidth"
     static let panelHeight = "panelHeight"
+    static let autoUpdate = "autoUpdate"
+    static let ignoredUpdateVersion = "ignoredUpdateVersion"
 }
 
 @MainActor
@@ -144,6 +146,16 @@ final class AppSettings: ObservableObject {
         defaults.set(panelHeight, forKey: Key.panelHeight)
     }
 
+    /// 自动检查更新并弹窗提示新版本
+    @Published var autoUpdateEnabled: Bool {
+        didSet { defaults.set(autoUpdateEnabled, forKey: Key.autoUpdate) }
+    }
+
+    /// 用户选了「忽略此版本」的版本号；比它新的版本照样会提示
+    @Published var ignoredUpdateVersion: String? {
+        didSet { defaults.set(ignoredUpdateVersion, forKey: Key.ignoredUpdateVersion) }
+    }
+
     /// 计算属性：真值来自系统，写入即注册/取消登录项（用 objectWillChange 让开关立刻回弹）
     var launchAtLogin: Bool {
         get {
@@ -232,6 +244,9 @@ final class AppSettings: ObservableObject {
         // 分不清「没设过」和「存的就是 0」，会把高度拉成 0
         let storedHeight = defaults.object(forKey: Key.panelHeight) as? Int ?? PanelMetrics.defaultHeight
         panelHeight = PanelMetrics.clamp(storedHeight)
+        // 默认开着：自动更新是这个 App 最省事的一环
+        autoUpdateEnabled = defaults.object(forKey: Key.autoUpdate) as? Bool ?? true
+        ignoredUpdateVersion = defaults.string(forKey: Key.ignoredUpdateVersion)
         panelWidth = defaults.integer(forKey: Key.panelWidth)
         if !Self.panelWidths.contains(panelWidth) { panelWidth = 420 }
 
