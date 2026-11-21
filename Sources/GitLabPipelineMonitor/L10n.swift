@@ -251,8 +251,6 @@ private let en: [String: String] = [
     "剪切": "Cut",
     "拷贝": "Copy",
     "粘贴": "Paste",
-    "暂停自动刷新": "Pause Auto Refresh",
-    "恢复自动刷新": "Resume Auto Refresh",
 
     // 杂项
     "项目 / 分支": "project / branch",

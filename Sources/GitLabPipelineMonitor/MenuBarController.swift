@@ -148,8 +148,9 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
         menu.addItem(.separator())
 
-        let autoTitle = settings.refreshInterval > 0 ? loc("暂停自动刷新") : loc("恢复自动刷新")
-        let auto = NSMenuItem(title: autoTitle, action: #selector(menuToggleAutoRefresh), keyEquivalent: "")
+        // 文案固定，状态交给勾：勾 = 自动刷新开着。
+        // 换成「暂停自动刷新 / 恢复自动刷新」那种动态文案，点之前就得先读一遍才知道当前是什么状态。
+        let auto = NSMenuItem(title: loc("自动刷新"), action: #selector(menuToggleAutoRefresh), keyEquivalent: "")
         auto.target = self
         auto.state = settings.refreshInterval > 0 ? .on : .off
         menu.addItem(auto)
